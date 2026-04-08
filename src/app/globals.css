@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Default: Wildflower */
+  --color-bg: #e8ecf8;
+  --color-primary: #a2a6f2;
+  --color-secondary: #b6b9f2;
+  --color-accent: #f28627;
+  --color-muted: #f2ae2e;
+  --foreground: #171717;
+}
+
+[data-vibe='winter_frost'] {
+  --color-bg: #f8ccaa;
+  --color-primary: #525871;
+  --color-secondary: #857c91;
+  --color-accent: #cd9fa0;
+  --color-muted: #f2c1a3;
+}
+
+[data-vibe='sakura'] {
+  --color-bg: #f2cf2a;
+  --color-primary: #443025;
+  --color-secondary: #7f5836;
+  --color-accent: #ec9c9d;
+  --color-muted: #aa7f66;
+}
+
+[data-vibe='botanical'] {
+  --color-bg: #dec59e;
+  --color-primary: #202808;
+  --color-secondary: #33432b;
+  --color-accent: #c4866d;
+  --color-muted: #6a784d;
+}
+
+[data-vibe='wildflower'] {
+  --color-bg: #e8ecf8;
+  --color-primary: #a2a6f2;
+  --color-secondary: #b6b9f2;
+  --color-accent: #f28627;
+  --color-muted: #f2ae2e;
+}
+
+[data-vibe='harvest'] {
+  --color-bg: #f5edd6;
+  --color-primary: #c64632;
+  --color-secondary: #9da33c; /* Fixed C30A3 to a valid Pear hex */
+  --color-accent: #8e9b7b; /* Fixed 9AA98 to a valid Sage hex */
+  --color-muted: #f2c599;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--color-bg);
+  min-height: 100vh;
+  transition: background-color 0.3s ease;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

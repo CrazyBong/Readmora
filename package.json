@@ -1,0 +1,50 @@
+{
+  "name": "readmora",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "prepare": "husky install"
+  },
+  "lint-staged": {
+    "src/**/*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "src/**/*.css": [
+      "prettier --write"
+    ]
+  },
+  "dependencies": {
+    "next": "14.2.35",
+    "pino": "^10.3.1",
+    "react": "^18",
+    "react-dom": "^18"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^8.0.0",
+    "jsdom": "^29.0.2",
+    "lint-staged": "^16.4.0",
+    "pino-pretty": "^13.1.3",
+    "postcss": "^8",
+    "prettier": "^3.8.1",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5",
+    "vitest": "^4.1.3"
+  }
+}
