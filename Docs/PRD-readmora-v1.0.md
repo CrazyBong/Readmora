@@ -360,6 +360,64 @@ Do NOT reproduce any significant portion of the book text.
 
 ---
 
+#### FR-008: Book Metadata & Cover Image Strategy
+
+### Description
+Readmora fetches book metadata and cover images from a free, public API (Open Library). This ensures zero cost for book data while maintaining broad global coverage.
+
+### Metadata Source
+- **Primary Source:** Open Library Search API  
+  https://openlibrary.org/search.json
+- **Search Fields:**
+  - Title
+  - Author
+  - ISBN (preferred match)
+
+### Cover Image Source
+- **Primary Source:** Open Library Covers API  
+  https://covers.openlibrary.org/
+
+- **Usage:**
+  - ISBN-based: https://covers.openlibrary.org/b/isbn/{ISBN}-M.jpg
+  - Cover ID-based: https://covers.openlibrary.org/b/id/{COVER_ID}-M.jpg
+
+- **Supported Sizes:**
+- `S` → Small (thumbnail)
+- `M` → Medium (card view)
+- `L` → Large (detail page)
+
+### Fallback Strategy (Critical)
+If a cover image is not available:
+
+1. Attempt fetch via ISBN (Open Library)
+2. Attempt fetch via Google Books API (Secondary Source)
+3. Attempt fetch via Open Library Cover ID
+4. Use stored `cover_url` (if previously cached)
+5. Fallback to **default placeholder image**
+
+### Placeholder Image
+- A default book cover placeholder is used when no image is available
+- Styled according to current "vibe theme"
+
+### Business Rules
+- Cover images are **not uploaded by default** — only referenced via URL
+- Manual book entries may include a custom `cover_url`
+- Cover must maintain **2:3 aspect ratio** across UI
+- Broken images must auto-replace with placeholder (client-side fallback)
+
+### Edge Cases
+- Missing ISBN → fallback to title+author match
+- Duplicate books → reuse existing metadata entry
+- Slow API response → show skeleton loader
+- Invalid image URL → fallback to placeholder
+
+### User Experience Notes
+- Book covers are treated as a **core visual element**
+- UI should never show broken or empty image states
+- Loading state should feel smooth and intentional
+
+---
+
 ### 5.3 Admin / Back-office Requirements
 - Internal dashboard (Supabase Studio sufficient for v1):
   - View all users, subscription status, AI usage per week
@@ -538,16 +596,19 @@ CREATE TRIGGER on_auth_user_created
 #### Table: `books`
 ```sql
 CREATE TABLE books (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  title TEXT NOT NULL,
-  author TEXT NOT NULL,
-  isbn TEXT UNIQUE,
-  cover_url TEXT,
-  description TEXT,
-  published_year INT,
-  genres TEXT[] DEFAULT '{}',
-  open_library_key TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title            TEXT NOT NULL,
+  author           TEXT NOT NULL,
+  isbn             TEXT UNIQUE,
+  cover_url        TEXT,
+  description      TEXT,
+  published_year   INT,
+  genres           TEXT[]   DEFAULT '{}',
+  openlibrary_id   TEXT UNIQUE,
+  cover_source     TEXT DEFAULT 'open_library',
+  cover_id         TEXT,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Public read, no write from client (seeded + added via server)
