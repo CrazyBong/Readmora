@@ -1,8 +1,7 @@
-'use client';
-
 import { AnimatePresence, motion } from 'framer-motion';
 import { usePathname } from 'next/navigation';
 import React, { useEffect } from 'react';
+import { PostHogProvider } from './PostHogProvider';
 
 export function ClientProviders({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -20,17 +19,19 @@ export function ClientProviders({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={pathname}
-        initial="initial"
-        animate="animate"
-        exit="exit"
-        variants={pageVariants as never}
-        className="flex-1 flex flex-col h-full w-full"
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
+    <PostHogProvider>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={pathname}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          variants={pageVariants as never}
+          className="flex-1 flex flex-col h-full w-full"
+        >
+          {children}
+        </motion.div>
+      </AnimatePresence>
+    </PostHogProvider>
   );
 }
