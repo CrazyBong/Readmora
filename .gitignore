@@ -34,3 +34,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# sensitive / temp
+/tmp/
+.env
+.env*
+! .env.example
+*.txt
+*.log

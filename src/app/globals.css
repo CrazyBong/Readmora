@@ -1,66 +1,245 @@
+@import 'tw-animate-css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  /* Default: Wildflower */
-  --color-bg: #e8ecf8;
-  --color-primary: #a2a6f2;
-  --color-secondary: #b6b9f2;
-  --color-accent: #f28627;
-  --color-muted: #f2ae2e;
-  --foreground: #171717;
-}
+@layer base {
+  :root {
+    /* Default spacing scale (8pt) mapped to tailwind natively, but good to have explicit vars if needed */
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.25rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+    --space-10: 2.5rem;
+    --space-12: 3rem;
 
-[data-vibe='winter_frost'] {
-  --color-bg: #f8ccaa;
-  --color-primary: #525871;
-  --color-secondary: #857c91;
-  --color-accent: #cd9fa0;
-  --color-muted: #f2c1a3;
-}
+    /* Radius */
+    --radius-sm: 0.375rem;
+    --radius-md: 0.75rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.5rem;
+    --radius-2xl: 2rem;
+    --radius-full: 9999px;
 
-[data-vibe='sakura'] {
-  --color-bg: #f2cf2a;
-  --color-primary: #443025;
-  --color-secondary: #7f5836;
-  --color-accent: #ec9c9d;
-  --color-muted: #aa7f66;
-}
+    /* Shadow System */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
+    --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.06);
+    --shadow-book: 4px 6px 24px rgba(0, 0, 0, 0.15);
 
-[data-vibe='botanical'] {
-  --color-bg: #dec59e;
-  --color-primary: #202808;
-  --color-secondary: #33432b;
-  --color-accent: #c4866d;
-  --color-muted: #6a784d;
-}
+    /* Vibe 1: Wildflower (Default) */
+    --color-bg: #e8ecf8;
+    --color-surface: #f4f6fc;
+    --color-primary: #a2a6f2;
+    --color-secondary: #b6b9f2;
+    --color-accent: #f28627;
+    --color-muted: #f2ae2e;
+    --color-text: #2d2a3e;
+    --color-text-muted: #7b7a96;
+    --color-overlay: rgba(162, 166, 242, 0.15);
 
-[data-vibe='wildflower'] {
-  --color-bg: #e8ecf8;
-  --color-primary: #a2a6f2;
-  --color-secondary: #b6b9f2;
-  --color-accent: #f28627;
-  --color-muted: #f2ae2e;
-}
-
-[data-vibe='harvest'] {
-  --color-bg: #f5edd6;
-  --color-primary: #c64632;
-  --color-secondary: #9da33c; /* Fixed C30A3 to a valid Pear hex */
-  --color-accent: #8e9b7b; /* Fixed 9AA98 to a valid Sage hex */
-  --color-muted: #f2c599;
-}
-
-body {
-  color: var(--foreground);
-  background: var(--color-bg);
-  min-height: 100vh;
-  transition: background-color 0.3s ease;
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+    /* Shadcn core mappings to Vibe sys */
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --destructive-foreground: #f8fafc;
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+    --radius: 0.625rem;
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.145 0 0);
+    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-accent-foreground: oklch(0.205 0 0);
+    --sidebar-border: oklch(0.922 0 0);
+    --sidebar-ring: oklch(0.708 0 0);
   }
+
+  [data-vibe='wildflower'] {
+    --color-bg: #e8ecf8;
+    --color-surface: #f4f6fc;
+    --color-primary: #a2a6f2;
+    --color-secondary: #b6b9f2;
+    --color-accent: #f28627;
+    --color-muted: #f2ae2e;
+    --color-text: #2d2a3e;
+    --color-text-muted: #7b7a96;
+    --color-overlay: rgba(162, 166, 242, 0.15);
+  }
+
+  [data-vibe='botanical'] {
+    --color-bg: #dec59e;
+    --color-surface: #edd6b2;
+    --color-primary: #202808;
+    --color-secondary: #33432b;
+    --color-accent: #c4866d;
+    --color-muted: #6a784d;
+    --color-text: #1a2108;
+    --color-text-muted: #5a6b40;
+    --color-overlay: rgba(32, 40, 8, 0.15);
+  }
+
+  [data-vibe='sakura'] {
+    --color-bg: #f2cfca;
+    --color-surface: #fadadd;
+    --color-primary: #443025;
+    --color-secondary: #7f5836;
+    --color-accent: #ec9c9d;
+    --color-muted: #aa7f66;
+    --color-text: #2e1a0e;
+    --color-text-muted: #7a5540;
+    --color-overlay: rgba(68, 48, 37, 0.12);
+  }
+
+  [data-vibe='harvest'] {
+    --color-bg: #f5edd6;
+    --color-surface: #fdf6e8;
+    --color-primary: #c64632;
+    --color-secondary: #c3a033;
+    --color-accent: #9aa988;
+    --color-muted: #f2c599;
+    --color-text: #2d1a0a;
+    --color-text-muted: #8b5e3c;
+    --color-overlay: rgba(198, 70, 50, 0.1);
+  }
+
+  [data-vibe='winter-frost'] {
+    --color-bg: #e3e9f4;
+    /* Cool Dawn — light slate blue */
+    --color-surface: #f0f4fa;
+    /* Lighter cool surface */
+    --color-primary: #4a5568;
+    /* Slate — deep and calm */
+    --color-secondary: #718096;
+    /* Muted slate */
+    --color-accent: #cd9fa0;
+    /* Rosewood — the warm contrast pop */
+    --color-muted: #cbd5e0;
+    /* Soft slate borders */
+    --color-text: #1a202c;
+    /* Deep navy-black */
+    --color-text-muted: #4a5568;
+    --color-overlay: rgba(74, 85, 104, 0.12);
+  }
+
+  .theme {
+    --font-heading: var(--font-sans);
+    --font-sans: var(--font-sans);
+  }
+
+  .dark {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  html {
+    @apply font-sans;
+  }
+}
+
+@layer base {
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    @apply transition-colors duration-300 ease-in-out;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+.modal-backdrop {
+  background: var(--color-overlay);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.container-custom {
+  width: min(1280px, 100% - 3rem);
+  margin-inline: auto;
+}
+
+.app-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  grid-template-rows: auto 1fr;
+  min-height: 100dvh;
+}
+
+@media (max-width: 768px) {
+  .app-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+  }
+}
+
+/* ── Utility: Hide Scrollbar (for horizontal tag scrolls) ── */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }

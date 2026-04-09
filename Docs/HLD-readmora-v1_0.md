@@ -603,8 +603,11 @@ CREATE TABLE books (
   description      TEXT,
   published_year   INT,
   genres           TEXT[] DEFAULT '{}',
-  open_library_key TEXT,
-  created_at       TIMESTAMPTZ DEFAULT NOW()
+  openlibrary_id   TEXT UNIQUE,
+  cover_source     TEXT DEFAULT 'open_library',
+  cover_id         TEXT,
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
@@ -772,6 +775,59 @@ POST /api/v1/ai/summary  { book_id }
 | `ai_usage` | Personal | Behavioural |
 | `subscriptions` | Financial / PII-adjacent | Razorpay IDs; retain 7 years |
 | `books`, `vibes`, `ai_summaries` | Public | No user data |
+
+---
+
+## 6.7 Book Metadata & Cover Image Architecture
+
+### Overview
+Readmora uses Open Library as the primary external source for book metadata and cover images. Data is cached in Supabase Postgres to minimise repeated API calls and improve performance.
+
+---
+
+### External APIs
+
+#### 1. Open Library Search API
+- Endpoint:
+  https://openlibrary.org/search.json?q={query}
+
+- Used for:
+  - Book discovery
+  - Metadata retrieval (title, author, ISBN, cover_id)
+
+---
+
+#### 2. Open Library Covers API
+- Endpoint:
+  https://covers.openlibrary.org/
+
+- Usage:
+  - ISBN-based:
+    https://covers.openlibrary.org/b/isbn/{ISBN}-M.jpg
+  - Cover ID-based:
+    https://covers.openlibrary.org/b/id/{COVER_ID}-M.jpg
+
+---
+
+### Data Model (Supabase Postgres)
+
+```sql
+books (
+  id UUID PRIMARY KEY,
+  title TEXT NOT NULL,
+  author TEXT NOT NULL,
+  isbn TEXT,
+  cover_url TEXT,
+  cover_source TEXT DEFAULT 'open_library',
+  open_library_id TEXT, -- Note: matches PRD openlibrary_id
+  cover_id TEXT,
+  description TEXT,
+  published_year INT,
+  genres TEXT[],
+  created_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ
+)
+```
 
 ---
 
