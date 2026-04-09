@@ -25,6 +25,18 @@ describe('getURL', () => {
     expect(getURL()).toBe('https://readmora.space');
   });
 
+  it('should fallback to window.location.origin if env vars are missing (Client-side simulation)', () => {
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+    delete process.env.NEXT_PUBLIC_VERCEL_URL;
+
+    // Simulate window.location.origin
+    vi.stubGlobal('window', { location: { origin: 'https://readmora.space' } });
+
+    expect(getURL()).toBe('https://readmora.space');
+
+    vi.unstubAllGlobals();
+  });
+
   it('should use NEXT_PUBLIC_VERCEL_URL if SITE_URL is missing', () => {
     delete process.env.NEXT_PUBLIC_SITE_URL;
     process.env.NEXT_PUBLIC_VERCEL_URL = 'readmora-preview.vercel.app';
