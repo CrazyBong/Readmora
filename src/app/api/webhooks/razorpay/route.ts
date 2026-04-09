@@ -58,57 +58,37 @@ export async function POST(request: NextRequest) {
 
       const logContext = { paymentId, userId };
 
-      // ── 3. Atomic Idempotency + Processing ──────────────────
-      // Note: subscriptions.razorpay_payment_id has a UNIQUE constraint.
-      // We insert first to "claim" this payment atomically.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: subError } = await (admin.from('subscriptions') as any).insert({
-        user_id: userId,
-        razorpay_payment_id: paymentId,
-        razorpay_subscription_id: payment?.subscription_id ?? null,
-        plan: planNote === 'annual' ? 'annual' : 'monthly',
-        amount_paise: payment?.amount ?? 0,
-        status: 'captured',
-      });
-
-      if (subError) {
-        // Code 23505 is Postgres unique_violation
-        if (subError.code === '23505') {
-          log.info(logContext, 'Event already processed (duplicate detected), skipping');
-          return NextResponse.json({ received: true, duplicate: true });
-        }
-        log.error({ ...logContext, subError }, 'Failed to record subscription entry');
-        throw subError; // Retry
-      }
-
-      // If we reached here, the insert was successful and we "own" this processing run.
+      // ── 3. Atomic Transaction via RPC ──────────────────────
       const plan = planNote === 'annual' ? 'annual' : 'monthly';
       const months = plan === 'annual' ? 12 : 1;
       const expiresAt = new Date();
       expiresAt.setMonth(expiresAt.getMonth() + months);
 
+      // Using RPC ensures that the subscription log and profile update are coupled
+      // in a single database transaction, preventing partial-failure bugs.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: profileError } = await (admin as any)
-        .from('profiles')
-        .update({
-          subscription_status: 'premium',
-          subscription_expires_at: expiresAt.toISOString(),
-          razorpay_customer_id: payment?.customer_id ?? null,
-        })
-        .eq('id', userId);
+      const { data, error: rpcError } = await (admin as any).rpc('process_subscription', {
+        p_user_id: userId,
+        p_payment_id: paymentId,
+        p_subscription_id: payment?.subscription_id ?? null,
+        p_plan: plan,
+        p_amount_paise: payment?.amount ?? 0,
+        p_expires_at: expiresAt.toISOString(),
+        p_customer_id: payment?.customer_id ?? null,
+      });
 
-      if (profileError) {
-        log.error(
-          { ...logContext, profileError },
-          'Critical: Subscription logged but profile update failed'
-        );
-        // NOTE: In a perfect world, this would be a single transaction.
-        // Since we insert into subscriptions first, we can at least detect partial failures
-        // manually or via a cleanup job. We throw here to force a retry.
-        throw profileError;
+      if (rpcError) {
+        log.error({ ...logContext, rpcError }, 'RPC failed: process_subscription');
+        throw rpcError; // Force retry for transient DB issues
       }
 
-      log.info({ ...logContext, plan }, 'Razorpay: subscription activated successfully');
+      const result = data as { success: boolean; duplicate?: boolean };
+      if (result?.duplicate) {
+        log.info(logContext, 'Idempotency catch: payment already processed in RPC');
+        return NextResponse.json({ received: true, duplicate: true });
+      }
+
+      log.info({ ...logContext, plan }, 'Razorpay: subscription activated atomically via RPC');
     }
 
     return NextResponse.json({ received: true });
