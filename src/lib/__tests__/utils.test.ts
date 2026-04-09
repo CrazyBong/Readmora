@@ -11,6 +11,7 @@ describe('getURL', () => {
 
   afterEach(() => {
     process.env = originalEnv;
+    vi.unstubAllGlobals();
   });
 
   it('should return localhost if no environment variables are set', () => {
@@ -22,6 +23,25 @@ describe('getURL', () => {
   it('should favor NEXT_PUBLIC_SITE_URL if set', () => {
     process.env.NEXT_PUBLIC_SITE_URL = 'https://readmora.space';
     process.env.NEXT_PUBLIC_VERCEL_URL = 'readmora-preview.vercel.app';
+    expect(getURL()).toBe('https://readmora.space');
+  });
+
+  it('should fallback to window.location.origin if env vars are missing (Client-side simulation)', () => {
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+    delete process.env.NEXT_PUBLIC_VERCEL_URL;
+
+    // Simulate window.location.origin
+    vi.stubGlobal('window', { location: { origin: 'https://readmora.space' } });
+
+    expect(getURL()).toBe('https://readmora.space');
+  });
+
+  it('should prioritize window.location.origin over localhost env var (Production Auto-healing)', () => {
+    process.env.NEXT_PUBLIC_SITE_URL = 'http://localhost:3000';
+
+    // Simulate being on a production domain
+    vi.stubGlobal('window', { location: { origin: 'https://readmora.space' } });
+
     expect(getURL()).toBe('https://readmora.space');
   });
 

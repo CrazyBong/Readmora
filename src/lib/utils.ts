@@ -12,8 +12,19 @@ export function cn(...inputs: ClassValue[]) {
 export function getURL(path: string = '') {
   let url =
     process.env.NEXT_PUBLIC_SITE_URL ?? // Set this to your site URL in production
-    process.env.NEXT_PUBLIC_VERCEL_URL ?? // Automatically set by Vercel for preview/prod
-    'http://localhost:3000';
+    process.env.NEXT_PUBLIC_VERCEL_URL; // Automatically set by Vercel for preview/prod
+
+  // Handle Browser context: Favor the current origin over a potential "localhost" env var fallback
+  if (typeof window !== 'undefined') {
+    const origin = window.location.origin;
+    // If env var is missing OR it's pointing to localhost while we are on a real domain
+    if (!url || (url.includes('localhost') && !origin.includes('localhost'))) {
+      url = origin;
+    }
+  }
+
+  // Final fallback to localhost if nothing else works
+  url = url || 'http://localhost:3000';
 
   // Make sure to include `https://` when not localhost.
   url = url.includes('http') ? url : `https://${url}`;

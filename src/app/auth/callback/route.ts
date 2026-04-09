@@ -60,5 +60,5 @@ export async function GET(request: NextRequest) {
     return response;
   }
 
-  return NextResponse.redirect(getURL('/home'));
+  return NextResponse.redirect(`${origin}/home`);
 }
