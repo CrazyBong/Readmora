@@ -36,6 +36,15 @@ describe('getURL', () => {
     expect(getURL()).toBe('https://readmora.space');
   });
 
+  it('should prioritize window.location.origin over localhost env var (Production Auto-healing)', () => {
+    process.env.NEXT_PUBLIC_SITE_URL = 'http://localhost:3000';
+
+    // Simulate being on a production domain
+    vi.stubGlobal('window', { location: { origin: 'https://readmora.space' } });
+
+    expect(getURL()).toBe('https://readmora.space');
+  });
+
   it('should use NEXT_PUBLIC_VERCEL_URL if SITE_URL is missing', () => {
     delete process.env.NEXT_PUBLIC_SITE_URL;
     process.env.NEXT_PUBLIC_VERCEL_URL = 'readmora-preview.vercel.app';
