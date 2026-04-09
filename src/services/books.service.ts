@@ -26,9 +26,9 @@ export const BookService = {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any);
 
-        if (!response.ok) {
+        if (!response || !response.ok) {
           logger.warn(
-            { status: response.status, query },
+            { status: response?.status, query },
             'Open Library search response not OK, falling back'
           );
           return await this.searchGoogleBooks(query);
@@ -85,7 +85,7 @@ export const BookService = {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await fetch(url, { next: { revalidate: 3600 } } as any);
 
-      if (!response.ok) return [];
+      if (!response || !response.ok) return [];
 
       const data = await response.json();
       if (!data || !Array.isArray(data.items)) return [];

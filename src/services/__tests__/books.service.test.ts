@@ -48,15 +48,44 @@ describe('BookService', () => {
     expect(book.genres).toEqual([]); // Expected to be empty array per design
   });
 
-  it('should throw an AppError on API failure', async () => {
+  it('should fallback to Google Books on Open Library failure', async () => {
+    // Mock 1: Open Library fails
     (global.fetch as Mock).mockResolvedValueOnce({
       ok: false,
       status: 500,
-      statusText: 'Server Error',
     });
 
-    await expect(BookService.searchOpenLibrary('A Great Book')).rejects.toThrow(
-      'Failed to proxy Open Library API'
-    );
+    // Mock 2: Google Books succeeds
+    const mockGoogleResponse = {
+      items: [
+        {
+          id: 'G123',
+          volumeInfo: {
+            title: 'Google Book',
+            authors: ['Google Author'],
+          },
+        },
+      ],
+    };
+
+    (global.fetch as Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockGoogleResponse,
+    });
+
+    const results = await BookService.searchOpenLibrary('A Great Book');
+    expect(results).toHaveLength(1);
+    expect(results[0]?.title).toBe('Google Book');
+    expect(results[0]?.cover_source).toBe('google_books');
+  });
+
+  it('should return empty array if all search providers fail', async () => {
+    (global.fetch as Mock).mockResolvedValue({
+      ok: false,
+      status: 500,
+    });
+
+    const results = await BookService.searchOpenLibrary('A Great Book');
+    expect(results).toEqual([]);
   });
 });
