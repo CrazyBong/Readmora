@@ -84,14 +84,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ── 4. Check global summary cache ────────────────────────────
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: cached } = await (admin.from('ai_summaries') as any)
-    .select('summary_markdown, model_version')
-    .eq('book_id', book_id)
-    .maybeSingle();
-
-  // ── 5. Check user rate limit ──────────────────────────────────
+  // ── 4. Check user rate limit profile ─────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: profile } = await (admin.from('profiles') as any)
     .select('subscription_status, subscription_expires_at')
@@ -113,36 +106,52 @@ export async function POST(request: NextRequest) {
 
   const usedThisWeek = usage?.usage_count ?? 0;
 
-  // ── 6. Enforce rate limit (free users, uncached books only count) ──
-  if (!isPremium && usedThisWeek >= FREE_LIMIT) {
-    return NextResponse.json<ApiResponse<RateLimitExceededResponse>>(
-      {
-        success: false,
-        error: {
-          code: ErrorCode.RATE_LIMIT_EXCEEDED,
-          message: 'Weekly AI summary limit reached',
-          details: {
-            code: 'RATE_LIMIT_EXCEEDED',
-            used: usedThisWeek,
-            limit: FREE_LIMIT,
-            resets_at: getNextWeekStart(),
-            upgrade_required: true,
+  // ── 5. Check global summary cache ────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: cached } = await (admin.from('ai_summaries') as any)
+    .select('summary_markdown, model_version')
+    .eq('book_id', book_id)
+    .maybeSingle();
+
+  // ── 6. Enforce rate limit (Atomic via RPC) ────────────────────
+  // We increment usage here. If it's already cached, it still counts as a use.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: newUsageCount, error: rpcError } = await (admin as any).rpc('increment_ai_usage', {
+    p_user_id: user.id,
+    p_week_start: weekStart,
+    p_max_limit: isPremium ? 999999 : FREE_LIMIT,
+  });
+
+  if (rpcError || newUsageCount === -1) {
+    const used = newUsageCount === -1 ? FREE_LIMIT : usedThisWeek;
+    if (newUsageCount === -1 || (rpcError && !isPremium && usedThisWeek >= FREE_LIMIT)) {
+      return NextResponse.json<ApiResponse<RateLimitExceededResponse>>(
+        {
+          success: false,
+          error: {
+            code: ErrorCode.RATE_LIMIT_EXCEEDED,
+            message: 'Weekly AI summary limit reached',
+            details: {
+              code: 'RATE_LIMIT_EXCEEDED',
+              used: used,
+              limit: FREE_LIMIT,
+              resets_at: getNextWeekStart(),
+              upgrade_required: true,
+            },
           },
         },
-      },
-      { status: 429 }
-    );
+        { status: 429 }
+      );
+    }
+    // If RPC fails but we aren't sure about the limit, we'll log and continue for now (fail-open for UX, or fail-closed for cost)
+    logger.error({ err: rpcError }, 'Atomic usage increment failed');
   }
 
-  // ── 7. Return cached summary (still increments usage counter) ─
-  if (cached) {
-    // Increment usage even for cached summary (reading counts as a use)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (admin.from('ai_usage') as any).upsert(
-      { user_id: user.id, week_start: weekStart, usage_count: usedThisWeek + 1 },
-      { onConflict: 'user_id,week_start' }
-    );
+  const finalUsageCount =
+    typeof newUsageCount === 'number' && newUsageCount > 0 ? newUsageCount : usedThisWeek + 1;
 
+  // ── 8. Return cached summary ─────────────────────────────────
+  if (cached) {
     return NextResponse.json<ApiResponse<AiSummaryResponse>>({
       success: true,
       data: {
@@ -150,7 +159,7 @@ export async function POST(request: NextRequest) {
         summary_markdown: cached.summary_markdown,
         cached: true,
         usage: {
-          used: usedThisWeek + 1,
+          used: finalUsageCount,
           limit: isPremium ? Infinity : FREE_LIMIT,
           resets_at: getNextWeekStart(),
         },
@@ -169,13 +178,6 @@ export async function POST(request: NextRequest) {
       { onConflict: 'book_id' }
     );
 
-    // Increment usage
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (admin.from('ai_usage') as any).upsert(
-      { user_id: user.id, week_start: weekStart, usage_count: usedThisWeek + 1 },
-      { onConflict: 'user_id,week_start' }
-    );
-
     return NextResponse.json<ApiResponse<AiSummaryResponse>>({
       success: true,
       data: {
@@ -183,7 +185,7 @@ export async function POST(request: NextRequest) {
         summary_markdown: result.summary_markdown,
         cached: false,
         usage: {
-          used: usedThisWeek + 1,
+          used: finalUsageCount,
           limit: isPremium ? Infinity : FREE_LIMIT,
           resets_at: getNextWeekStart(),
         },

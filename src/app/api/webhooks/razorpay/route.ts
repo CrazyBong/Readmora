@@ -10,12 +10,19 @@ import { logger } from '@/lib/logger';
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
   const signature = request.headers.get('x-razorpay-signature') ?? '';
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET ?? '';
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  if (!secret) {
+    logger.error('RAZORPAY_WEBHOOK_SECRET is not configured');
+    return NextResponse.json({ error: 'Webhook configuration error' }, { status: 500 });
+  }
 
   // ── 1. Verify HMAC signature ───────────────────────────────
   const expectedSig = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
 
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) {
+  const sigBuf = Buffer.from(signature);
+  const expectedBuf = Buffer.from(expectedSig);
+
+  if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
     logger.warn('Razorpay webhook: invalid signature');
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }

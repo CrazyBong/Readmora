@@ -77,8 +77,13 @@ export default function OnboardingFlow({ userEmail }: { userEmail: string }) {
   const handleAvatarUpload = async (file: File) => {
     try {
       setAvatarUploading(true);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
       const fileExt = file.name.split('.').pop();
-      const filePath = `avatar-${Date.now()}.${fileExt}`;
+      const filePath = `${user.id}/avatar-${Date.now()}.${fileExt}`;
       const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file);
       if (uploadError) throw uploadError;
       const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
