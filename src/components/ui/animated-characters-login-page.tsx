@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Eye, EyeOff, Mail, Sparkles } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { getURL } from '@/lib/utils';
 
 interface PupilProps {
   size?: number;
@@ -330,7 +331,7 @@ export function AnimatedAuthPage({ isSignUp = false }: { isSignUp?: boolean }) {
       await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: getURL('/auth/callback'),
         },
       });
     } catch (err) {

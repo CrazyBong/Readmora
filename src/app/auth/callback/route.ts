@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import type { Database } from '@/types/database';
 import { logger } from '@/lib/logger';
+import { getURL } from '@/lib/utils';
 
 /**
  * GET /auth/callback
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
 
   const rawNext = searchParams.get('next') ?? '/home';
   const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/home';
-  const response = NextResponse.redirect(`${origin}${next}`);
+  const response = NextResponse.redirect(getURL(next));
 
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -59,5 +60,5 @@ export async function GET(request: NextRequest) {
     return response;
   }
 
-  return NextResponse.redirect(`${origin}/home`);
+  return NextResponse.redirect(getURL('/home'));
 }
