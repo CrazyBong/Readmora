@@ -13,6 +13,8 @@ export function getURL(path: string = '') {
   let url =
     process.env.NEXT_PUBLIC_SITE_URL ?? // Set this to your site URL in production
     process.env.NEXT_PUBLIC_VERCEL_URL ?? // Automatically set by Vercel for preview/prod
+    // NOTE: window fallback only works in Browser environment.
+    // Server-side callers (like API routes) will fallback to localhost if env vars are missing.
     (typeof window !== 'undefined' && window.location.origin
       ? window.location.origin
       : 'http://localhost:3000');

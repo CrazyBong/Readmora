@@ -11,6 +11,7 @@ describe('getURL', () => {
 
   afterEach(() => {
     process.env = originalEnv;
+    vi.unstubAllGlobals();
   });
 
   it('should return localhost if no environment variables are set', () => {
@@ -33,8 +34,6 @@ describe('getURL', () => {
     vi.stubGlobal('window', { location: { origin: 'https://readmora.space' } });
 
     expect(getURL()).toBe('https://readmora.space');
-
-    vi.unstubAllGlobals();
   });
 
   it('should use NEXT_PUBLIC_VERCEL_URL if SITE_URL is missing', () => {
