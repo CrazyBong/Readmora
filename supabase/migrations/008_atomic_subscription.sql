@@ -44,6 +44,11 @@ BEGIN
     razorpay_customer_id = p_customer_id
   WHERE id = p_user_id;
 
+  -- Ensure the user actually exists; otherwise, roll back the entire transaction.
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Profile not found for user %', p_user_id;
+  END IF;
+
   RETURN jsonb_build_object(
     'success', true,
     'subscription_id', v_sub_id
