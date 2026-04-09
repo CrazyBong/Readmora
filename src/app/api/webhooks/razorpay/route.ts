@@ -8,11 +8,11 @@ import { logger } from '@/lib/logger';
  * Handles Razorpay payment events. Verifies HMAC signature before processing.
  */
 export async function POST(request: NextRequest) {
-  const admin = createSupabaseAdminClient();
   const requestId = crypto.randomUUID();
   const log = logger.child({ requestId, context: 'razorpay-webhook' });
 
   try {
+    const admin = createSupabaseAdminClient();
     const rawBody = await request.text();
     const signature = request.headers.get('x-razorpay-signature') ?? '';
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
@@ -53,24 +53,35 @@ export async function POST(request: NextRequest) {
 
       if (!paymentId || !userId || !planNote) {
         log.warn({ paymentId, userId, planNote }, 'Razorpay webhook: missing required metadata');
-        return NextResponse.json({ received: true }); // Fail open to stop retries on bad data
+        return NextResponse.json({ received: true });
       }
 
       const logContext = { paymentId, userId };
 
-      // ── 3. Idempotency Check ───────────────────────────────
+      // ── 3. Atomic Idempotency + Processing ──────────────────
+      // Note: subscriptions.razorpay_payment_id has a UNIQUE constraint.
+      // We insert first to "claim" this payment atomically.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: existing } = await (admin.from('subscriptions') as any)
-        .select('id')
-        .eq('razorpay_payment_id', paymentId)
-        .maybeSingle();
+      const { error: subError } = await (admin.from('subscriptions') as any).insert({
+        user_id: userId,
+        razorpay_payment_id: paymentId,
+        razorpay_subscription_id: payment?.subscription_id ?? null,
+        plan: planNote === 'annual' ? 'annual' : 'monthly',
+        amount_paise: payment?.amount ?? 0,
+        status: 'captured',
+      });
 
-      if (existing) {
-        log.info(logContext, 'Event already processed, skipping');
-        return NextResponse.json({ received: true, duplicate: true });
+      if (subError) {
+        // Code 23505 is Postgres unique_violation
+        if (subError.code === '23505') {
+          log.info(logContext, 'Event already processed (duplicate detected), skipping');
+          return NextResponse.json({ received: true, duplicate: true });
+        }
+        log.error({ ...logContext, subError }, 'Failed to record subscription entry');
+        throw subError; // Retry
       }
 
-      // ── 4. Activate Subscription ──────────────────────────
+      // If we reached here, the insert was successful and we "own" this processing run.
       const plan = planNote === 'annual' ? 'annual' : 'monthly';
       const months = plan === 'annual' ? 12 : 1;
       const expiresAt = new Date();
@@ -87,24 +98,14 @@ export async function POST(request: NextRequest) {
         .eq('id', userId);
 
       if (profileError) {
-        log.error({ ...logContext, profileError }, 'Failed to update profile subscription status');
-        throw profileError; // Trigger retry if database update fails
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: subError } = await (admin as any).from('subscriptions').insert({
-        user_id: userId,
-        razorpay_payment_id: paymentId,
-        razorpay_subscription_id: payment?.subscription_id ?? null,
-        plan: plan as 'monthly' | 'annual',
-        amount_paise: payment?.amount ?? 0,
-        status: 'captured',
-      });
-
-      if (subError) {
-        log.error({ ...logContext, subError }, 'Failed to log subscription entry');
-        // If profile updated but subscription log failed, we still want to know
-        throw subError;
+        log.error(
+          { ...logContext, profileError },
+          'Critical: Subscription logged but profile update failed'
+        );
+        // NOTE: In a perfect world, this would be a single transaction.
+        // Since we insert into subscriptions first, we can at least detect partial failures
+        // manually or via a cleanup job. We throw here to force a retry.
+        throw profileError;
       }
 
       log.info({ ...logContext, plan }, 'Razorpay: subscription activated successfully');
