@@ -51,30 +51,32 @@ export async function addBookToShelf(
       ...shelfData,
     });
 
-    // Check if entry already exists to determine if we should increment books_count
-    const existingEntry = await ShelfRepository.findByUserAndBook(
-      supabase,
-      user.id,
-      payload.book_id
-    );
+    // Use a DB function so the upsert and count mutation stay in one transaction.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: rpcError } = await (supabase as any).rpc('upsert_shelf_entry_and_sync_count', {
+      p_user_id: user.id,
+      p_book_id: payload.book_id,
+      p_shelf: payload.shelf,
+      p_rating: payload.rating ?? null,
+      p_notes: payload.notes ?? null,
+      p_started_at: payload.started_at ?? null,
+      p_finished_at:
+        payload.finished_at ??
+        (payload.shelf === 'finished' ? new Date().toISOString().split('T')[0] : null),
+    });
 
-    const entry = await ShelfRepository.upsert(supabase, user.id, payload);
+    if (rpcError) {
+      logger.error(
+        { rpcError, userId: user.id, bookId },
+        'Failed to upsert shelf entry atomically'
+      );
+      throw new AppError(ErrorCode.INTERNAL_ERROR, 'Failed to update shelf', 500);
+    }
 
-    // Atomic increment ONLY if this is a new book on the shelf
-    if (!existingEntry) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: rpcError } = await (supabase as any).rpc('increment_books_count', {
-        profile_id: user.id,
-      });
+    const entry = await ShelfRepository.findByUserAndBook(supabase, user.id, payload.book_id);
 
-      if (rpcError) {
-        logger.error(
-          { rpcError, userId: user.id },
-          'Failed to atomic increment books_count, flagging for recount'
-        );
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any).from('profiles').update({ needs_recount: true }).eq('id', user.id);
-      }
+    if (!entry) {
+      throw new AppError(ErrorCode.INTERNAL_ERROR, 'Failed to fetch saved shelf entry', 500);
     }
 
     revalidatePath('/home');
@@ -113,26 +115,18 @@ export async function removeBookFromShelf(bookId: string) {
       throw new AppError(ErrorCode.UNAUTHORIZED, 'Not authenticated', 401);
     }
 
-    // Check if it exists before removing to determine if we should decrement
-    const existingEntry = await ShelfRepository.findByUserAndBook(supabase, user.id, bookId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: rpcError } = await (supabase as any).rpc('remove_shelf_entry_and_sync_count', {
+      p_user_id: user.id,
+      p_book_id: bookId,
+    });
 
-    if (existingEntry) {
-      await ShelfRepository.remove(supabase, user.id, bookId);
-
-      // Atomic decrement
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: rpcError } = await (supabase as any).rpc('decrement_books_count', {
-        profile_id: user.id,
-      });
-
-      if (rpcError) {
-        logger.error(
-          { rpcError, userId: user.id },
-          'Failed to atomic decrement books_count, flagging for recount'
-        );
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any).from('profiles').update({ needs_recount: true }).eq('id', user.id);
-      }
+    if (rpcError) {
+      logger.error(
+        { rpcError, userId: user.id, bookId },
+        'Failed to remove shelf entry atomically'
+      );
+      throw new AppError(ErrorCode.INTERNAL_ERROR, 'Failed to remove from shelf', 500);
     }
 
     revalidatePath('/home');
@@ -260,6 +254,18 @@ export async function importGoodreads(
     }
 
     const { count } = await ShelfRepository.batchUpsert(supabase, shelfEntriesToInsert);
+
+    // Imports can mix inserts and updates, so recompute the denormalized count once after the batch.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: syncError } = await (supabase as any).rpc('sync_books_count', {
+      profile_id: user.id,
+    });
+
+    if (syncError) {
+      logger.error({ syncError, userId: user.id }, 'Failed to sync books_count after import');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from('profiles').update({ needs_recount: true }).eq('id', user.id);
+    }
 
     revalidatePath('/home');
     return { success: true, count };

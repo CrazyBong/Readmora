@@ -1,6 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+
+import MarkdownContent from '@/components/MarkdownContent';
+import { isUnlimitedAiUsageLimit } from '@/lib/ai-usage';
 import type { AiSummaryResponse } from '@/types/api';
 
 interface AISummaryModalProps {
@@ -9,21 +12,6 @@ interface AISummaryModalProps {
   bookId: string;
   onClose: () => void;
   onRateLimit: (details: { resets_at: string }) => void;
-}
-
-// Simple markdown to HTML converter for bold/headers/bullets (Harden against basic script tags)
-function renderMarkdown(md: string): string {
-  if (!md) return '';
-  const safeMd = md.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, '');
-  return safeMd
-    .replace(/^### (.+)$/gm, '<h3 class="text-base font-bold mt-4 mb-1">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 class="text-lg font-bold mt-4 mb-1">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 class="text-xl font-bold mt-4 mb-1">$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/^[\-\*] (.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
-    .replace(/\n\n/g, '</p><p class="mt-2 text-balance">')
-    .replace(/\n/g, '<br/>');
 }
 
 export default function AISummaryModal({
@@ -41,6 +29,7 @@ export default function AISummaryModal({
   const fetchSummary = async () => {
     setLoading(true);
     setError(null);
+
     try {
       const res = await fetch('/api/ai/summary', {
         method: 'POST',
@@ -80,14 +69,13 @@ export default function AISummaryModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      onClick={(event) => event.target === event.currentTarget && onClose()}
     >
       <div className="bg-[color:var(--color-bg)] border border-white/20 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
-        {/* Header */}
         <div className="sticky top-0 bg-[color:var(--color-bg)] border-b border-black/10 px-6 py-4 flex items-start justify-between gap-4 rounded-t-2xl">
           <div>
             <div className="flex items-center gap-2 mb-0.5">
-              <span className="text-lg">✨</span>
+              <span className="text-lg">AI</span>
               <span className="text-xs font-semibold text-[color:var(--color-primary)] uppercase tracking-wider">
                 AI Summary
               </span>
@@ -100,20 +88,19 @@ export default function AISummaryModal({
             className="text-[color:var(--foreground)] opacity-50 hover:opacity-100 text-xl leading-none mt-0.5 shrink-0"
             aria-label="Close"
           >
-            ✕
+            x
           </button>
         </div>
 
-        {/* Body */}
         <div className="px-6 py-5">
           {!fetched && !loading && !error && (
             <div className="text-center py-8">
               <p className="text-[color:var(--foreground)] opacity-70 text-sm mb-6">
-                Get an AI-powered literary analysis of this book — themes, writing style, and who
+                Get an AI-powered literary analysis of this book: themes, writing style, and who
                 would love it.
               </p>
               <button onClick={fetchSummary} className="login-btn login-btn--primary">
-                ✨ Generate Summary
+                Generate Summary
               </button>
             </div>
           )}
@@ -121,7 +108,7 @@ export default function AISummaryModal({
           {loading && (
             <div className="flex flex-col items-center justify-center py-12 gap-3">
               <div className="w-8 h-8 border-2 border-[color:var(--color-primary)] border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm opacity-60">Analysing with Gemini AI…</p>
+              <p className="text-sm opacity-60">Analysing with Gemini AI...</p>
             </div>
           )}
 
@@ -136,19 +123,17 @@ export default function AISummaryModal({
 
           {summary && (
             <div>
-              <div
+              <MarkdownContent
                 className="prose prose-sm max-w-none text-[color:var(--foreground)] leading-relaxed"
-                dangerouslySetInnerHTML={{
-                  __html: `<p class="mt-2">${renderMarkdown(summary.summary_markdown)}</p>`,
-                }}
+                content={summary.summary_markdown}
               />
               {summary.usage && (
                 <div className="mt-6 pt-4 border-t border-black/10 flex justify-between text-xs opacity-50">
-                  <span>Powered by Gemini AI{summary.cached ? ' · Cached' : ''}</span>
+                  <span>Powered by Gemini AI{summary.cached ? ' - Cached' : ''}</span>
                   <span>
                     {summary.usage.used}/
-                    {summary.usage.limit === Infinity ? '∞' : summary.usage.limit} summaries this
-                    week
+                    {isUnlimitedAiUsageLimit(summary.usage.limit) ? 'inf' : summary.usage.limit}{' '}
+                    summaries this week
                   </span>
                 </div>
               )}

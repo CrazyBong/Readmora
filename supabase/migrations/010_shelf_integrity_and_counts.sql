@@ -27,7 +27,7 @@ BEGIN
     SET books_count = books_count + 1
     WHERE id = profile_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION public.decrement_books_count(profile_id UUID)
 RETURNS void AS $$
@@ -36,7 +36,7 @@ BEGIN
     SET books_count = GREATEST(0, books_count - 1)
     WHERE id = profile_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- 4. Create lazy healer: Reconcile only 'dirty' profiles to avoid massive table scans
 CREATE OR REPLACE FUNCTION public.reconcile_dirty_profiles()
@@ -54,7 +54,7 @@ BEGIN
     WHERE p.id = sub.user_id 
     AND p.needs_recount = TRUE;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- 5. Initial Backfill (One-time table scan is acceptable here)
 UPDATE public.profiles p
