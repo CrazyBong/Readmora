@@ -73,9 +73,11 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: 'https://res.cloudinary.com/djozgxq9k/image/upload/v1775730895/Gemini_Generated_Image_9a5qpf9a5qpf9a5q_xu6ewt.png',
-    apple:
-      'https://res.cloudinary.com/djozgxq9k/image/upload/v1775730895/Gemini_Generated_Image_9a5qpf9a5qpf9a5q_xu6ewt.png',
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon.ico', rel: 'shortcut icon' },
+    ],
+    apple: [{ url: '/favicon.ico' }],
   },
 };
 
