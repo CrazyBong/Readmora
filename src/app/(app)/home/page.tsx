@@ -52,6 +52,32 @@ interface ProfileData {
 
 const SEARCH_LIMIT = 24;
 
+function dedupeDiscoveryBooks(books: DiscoveryBook[]): DiscoveryBook[] {
+  const dedupedBooks = new Map<string, DiscoveryBook>();
+
+  for (const book of books) {
+    const stableKey = book.openlibrary_id || book.id;
+    const existingBook = dedupedBooks.get(stableKey);
+
+    if (!existingBook) {
+      dedupedBooks.set(stableKey, book);
+      continue;
+    }
+
+    const mergedRating = existingBook.rating ?? book.rating;
+
+    dedupedBooks.set(stableKey, {
+      ...existingBook,
+      ...book,
+      genre: existingBook.genre,
+      ...(existingBook.isSaved || book.isSaved ? { isSaved: true } : {}),
+      ...(mergedRating !== undefined ? { rating: mergedRating } : {}),
+    });
+  }
+
+  return Array.from(dedupedBooks.values());
+}
+
 // ── Shared Discovery Tech ───────────────────────────────────────────────────
 
 const TAGS = [
@@ -330,7 +356,7 @@ export default function MasonryHomeFeed() {
       setGenres(resolvedGenres);
 
       const results = await Promise.all(resolvedGenres.map((g) => fetchBooksForGenre(g, 0)));
-      const merged = results.flat().sort(() => Math.random() - 0.5);
+      const merged = dedupeDiscoveryBooks(results.flat()).sort(() => Math.random() - 0.5);
       setBooks(merged);
       setPage(1);
       setHasMore(merged.length >= SEARCH_LIMIT);
@@ -366,7 +392,7 @@ export default function MasonryHomeFeed() {
     }
 
     try {
-      const results = await searchBooks(queryToUse);
+      const results = dedupeDiscoveryBooks(await searchBooks(queryToUse));
       setBooks(results);
       setHasMore(false);
     } catch (e) {
@@ -407,11 +433,7 @@ export default function MasonryHomeFeed() {
         if (newBooks.length === 0) {
           setHasMore(false);
         } else {
-          setBooks((prev) => {
-            const existingIds = new Set(prev.map((b) => b.id));
-            const unique = newBooks.filter((b) => !existingIds.has(b.id));
-            return [...prev, ...unique];
-          });
+          setBooks((prev) => dedupeDiscoveryBooks([...prev, ...newBooks]));
           setPage((p) => p + 1);
         }
       } catch (e) {
