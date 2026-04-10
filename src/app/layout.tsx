@@ -47,11 +47,14 @@ export const metadata: Metadata = {
     'readmora',
   ],
   authors: [{ name: 'Readmora' }],
-  metadataBase: new URL('https://readmora.com'),
+  metadataBase: new URL('https://readmora.space'),
+  alternates: {
+    canonical: '/',
+  },
   openGraph: {
     title: 'Readmora',
     description: 'Track your books, get AI summaries, and vibe with your reading habits.',
-    url: 'https://readmora.com',
+    url: 'https://readmora.space',
     siteName: 'Readmora',
     locale: 'en_US',
     type: 'website',
