@@ -79,6 +79,7 @@ export default function LibraryView({ initialEntries }: { initialEntries: ShelfE
                   alt={`Cover of ${entry.book.title}`}
                   width={150}
                   height={225}
+                  sizes="(max-width: 640px) 45vw, (max-width: 1024px) 28vw, 150px"
                   className="w-full h-full object-cover"
                   loading="lazy"
                 />

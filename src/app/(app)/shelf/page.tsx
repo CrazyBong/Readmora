@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import {
   Bookmark,
@@ -86,6 +87,18 @@ function getPrimaryDate(entry: ShelfPageEntry): Date {
   return new Date(source);
 }
 
+function getDateKey(value: string | Date): string {
+  const date = value instanceof Date ? value : new Date(value);
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getEntryDateKey(entry: ShelfPageEntry): string {
+  return getDateKey(entry.finished_at ?? entry.started_at ?? entry.created_at);
+}
+
 function formatShortDate(value: string | null): string {
   if (!value) return '—';
   return new Date(value).toLocaleDateString(undefined, {
@@ -135,7 +148,15 @@ function BookCover({ book }: { book: ShelfPageBook | null }) {
   }
 
   if (book.cover_url) {
-    return <img src={book.cover_url} alt={book.title} className="h-full w-full object-cover" />;
+    return (
+      <Image
+        src={book.cover_url}
+        alt={book.title}
+        fill
+        sizes="(max-width: 768px) 64px, 96px"
+        className="object-cover"
+      />
+    );
   }
 
   return (
@@ -165,7 +186,7 @@ export default function ShelfPage() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
 
-  const supabase = createSupabaseBrowserClient();
+  const [supabase] = useState(() => createSupabaseBrowserClient());
   const loaderRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -286,7 +307,7 @@ export default function ShelfPage() {
     .sort((left, right) => getPrimaryDate(left).getTime() - getPrimaryDate(right).getTime());
 
   const eventMap = monthEvents.reduce<Record<string, ShelfPageEntry[]>>((accumulator, entry) => {
-    const key = getPrimaryDate(entry).toISOString().slice(0, 10);
+    const key = getEntryDateKey(entry);
     accumulator[key] = accumulator[key] ? [...accumulator[key], entry] : [entry];
     return accumulator;
   }, {});
@@ -402,7 +423,7 @@ export default function ShelfPage() {
 
                         {entry.shelf === 'currently_reading' && (
                           <div className="mb-4 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-                            <div className="h-full w-[45%] bg-[color:var(--color-accent)]" />
+                            <div className="h-full w-full animate-pulse bg-[color:var(--color-accent)]/60" />
                           </div>
                         )}
 
@@ -585,7 +606,7 @@ export default function ShelfPage() {
 
             <div className="grid grid-cols-7 gap-2">
               {calendarDays.map((day) => {
-                const dayKey = day.toISOString().slice(0, 10);
+                const dayKey = getDateKey(day);
                 const dayEvents = eventMap[dayKey] ?? [];
                 const isInMonth = day.getMonth() === visibleMonth.getMonth();
 

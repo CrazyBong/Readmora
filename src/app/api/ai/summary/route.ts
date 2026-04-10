@@ -161,6 +161,7 @@ export async function POST(request: NextRequest) {
   const isPremium =
     profile?.subscription_status === 'premium' &&
     (!profile.subscription_expires_at || new Date(profile.subscription_expires_at) > new Date());
+  const usageLimit = isPremium ? PREMIUM_AI_SUMMARY_LIMIT : FREE_AI_SUMMARY_LIMIT;
 
   const weekStart = getISOWeekStart();
   const usageResult = await admin
@@ -180,48 +181,6 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
   const cached = cachedResult.data as Pick<AiSummary, 'summary_markdown' | 'model_version'> | null;
 
-  const { data: newUsageCount, error: usageError } = await callAdminRpc<number>(
-    admin,
-    'increment_ai_usage',
-    {
-      p_user_id: user.id,
-      p_week_start: weekStart,
-      p_max_limit: isPremium ? PREMIUM_AI_SUMMARY_LIMIT : FREE_AI_SUMMARY_LIMIT,
-    }
-  );
-
-  if (usageError || newUsageCount === -1) {
-    const used = newUsageCount === -1 ? FREE_AI_SUMMARY_LIMIT : usedThisWeek;
-
-    if (
-      newUsageCount === -1 ||
-      (usageError && !isPremium && usedThisWeek >= FREE_AI_SUMMARY_LIMIT)
-    ) {
-      return NextResponse.json<ApiResponse<RateLimitExceededResponse>>(
-        {
-          success: false,
-          error: {
-            code: ErrorCode.RATE_LIMIT_EXCEEDED,
-            message: 'Weekly AI summary limit reached',
-            details: {
-              code: 'RATE_LIMIT_EXCEEDED',
-              used,
-              limit: FREE_AI_SUMMARY_LIMIT,
-              resets_at: getNextWeekStart(),
-              upgrade_required: true,
-            },
-          },
-        },
-        { status: 429 }
-      );
-    }
-
-    logger.error({ err: usageError, userId: user.id }, 'Atomic usage increment failed');
-  }
-
-  const finalUsageCount =
-    typeof newUsageCount === 'number' && newUsageCount > 0 ? newUsageCount : usedThisWeek + 1;
-
   const shelfEntryResult = await admin
     .from('shelf_entries')
     .select('summary_status')
@@ -229,6 +188,18 @@ export async function POST(request: NextRequest) {
     .eq('book_id', book_id)
     .maybeSingle();
   const shelfEntry = shelfEntryResult.data as Pick<ShelfEntry, 'summary_status'> | null;
+
+  if (cached) {
+    return NextResponse.json<ApiResponse<AiSummaryResponse>>({
+      success: true,
+      data: {
+        book_id,
+        summary_markdown: cached.summary_markdown,
+        cached: true,
+        usage: buildUsage(isPremium, usedThisWeek),
+      },
+    });
+  }
 
   if (!shelfEntry) {
     const { error: ensureShelfError } = await callAdminRpc<boolean>(
@@ -289,18 +260,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (cached) {
-    return NextResponse.json<ApiResponse<AiSummaryResponse>>({
-      success: true,
-      data: {
-        book_id,
-        summary_markdown: cached.summary_markdown,
-        cached: true,
-        usage: buildUsage(isPremium, finalUsageCount),
-      },
-    });
-  }
-
   if (
     currentShelfEntry?.summary_status === 'processing' ||
     currentShelfEntry?.summary_status === 'pending'
@@ -312,10 +271,49 @@ export async function POST(request: NextRequest) {
         summary_markdown: '',
         cached: false,
         status: 'queued',
-        usage: buildUsage(isPremium, finalUsageCount),
+        usage: buildUsage(isPremium, usedThisWeek),
       },
     });
   }
+
+  const { data: newUsageCount, error: usageError } = await callAdminRpc<number>(
+    admin,
+    'increment_ai_usage',
+    {
+      p_user_id: user.id,
+      p_week_start: weekStart,
+      p_max_limit: usageLimit,
+    }
+  );
+
+  if (usageError || newUsageCount === -1) {
+    const used = newUsageCount === -1 ? usageLimit : usedThisWeek;
+
+    if (newUsageCount === -1 || (usageError && usedThisWeek >= usageLimit)) {
+      return NextResponse.json<ApiResponse<RateLimitExceededResponse>>(
+        {
+          success: false,
+          error: {
+            code: ErrorCode.RATE_LIMIT_EXCEEDED,
+            message: 'Weekly AI summary limit reached',
+            details: {
+              code: 'RATE_LIMIT_EXCEEDED',
+              used,
+              limit: usageLimit,
+              resets_at: getNextWeekStart(),
+              upgrade_required: !isPremium,
+            },
+          },
+        },
+        { status: 429 }
+      );
+    }
+
+    logger.error({ err: usageError, userId: user.id }, 'Atomic usage increment failed');
+  }
+
+  const finalUsageCount =
+    typeof newUsageCount === 'number' && newUsageCount > 0 ? newUsageCount : usedThisWeek + 1;
 
   try {
     const { inngest } = await import('@/lib/inngest/client');
@@ -367,6 +365,15 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     logger.error({ err: error, book_id, userId: user.id }, 'Failed to enqueue AI summary job');
+
+    const { error: rollbackError } = await updateShelfSummaryStatus(admin, user.id, book_id, null);
+    if (rollbackError) {
+      logger.error(
+        { rollbackError, book_id, userId: user.id },
+        'Failed to roll back summary_status after enqueue failure'
+      );
+    }
+
     return NextResponse.json<ApiResponse<never>>(
       {
         success: false,

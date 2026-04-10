@@ -15,6 +15,10 @@ import { ZodError } from 'zod';
 
 export type BookInsert = Database['public']['Tables']['books']['Insert'];
 
+function getLocalDateString() {
+  return new Date().toLocaleDateString('en-CA');
+}
+
 /**
  * Ensures a book exists in our global database.
  * If not, inserts it. Uses the admin client to bypass the server-only write restriction.
@@ -61,8 +65,7 @@ export async function addBookToShelf(
       p_notes: payload.notes ?? null,
       p_started_at: payload.started_at ?? null,
       p_finished_at:
-        payload.finished_at ??
-        (payload.shelf === 'finished' ? new Date().toISOString().split('T')[0] : null),
+        payload.finished_at ?? (payload.shelf === 'finished' ? getLocalDateString() : null),
     });
 
     if (rpcError) {

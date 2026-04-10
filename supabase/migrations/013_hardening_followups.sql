@@ -1,5 +1,5 @@
--- Migration: 012_atomic_shelf_mutations.sql
--- Description: Makes shelf entry mutations and books_count updates atomic.
+-- Migration: 013_hardening_followups.sql
+-- Description: Applies auth and RLS hardening for databases where 010/011 were already executed.
 
 CREATE OR REPLACE FUNCTION public.increment_books_count(profile_id UUID)
 RETURNS void AS $$
@@ -157,3 +157,16 @@ BEGIN
     RETURN removed_existing;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+ALTER TABLE public.ai_task_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "ai_task_logs_select_own" ON public.ai_task_logs;
+CREATE POLICY "ai_task_logs_select_own"
+  ON public.ai_task_logs FOR SELECT
+  USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "ai_task_logs_service_role_all" ON public.ai_task_logs;
+CREATE POLICY "ai_task_logs_service_role_all"
+  ON public.ai_task_logs FOR ALL
+  USING (auth.role() = 'service_role')
+  WITH CHECK (auth.role() = 'service_role');

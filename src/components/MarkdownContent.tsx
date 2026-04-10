@@ -22,8 +22,10 @@ function normalizeSource(content: string): string {
 }
 
 function renderInline(content: string, keyPrefix: string): ReactNode[] {
+  const inlinePattern = /(\*\*[^*\n](?:.*?[^*\n])?\*\*|(?<!\*)\*[^*\s\n](?:.*?[^*\s\n])?\*(?!\*))/g;
+
   return content
-    .split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g)
+    .split(inlinePattern)
     .filter(Boolean)
     .map((segment, index) => {
       const key = `${keyPrefix}-${index}`;

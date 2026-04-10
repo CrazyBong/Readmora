@@ -10,6 +10,8 @@ import { ArrowLeft, BookOpen, Loader2, Plus, Quote, Sparkles, Star } from 'lucid
 import { addBookToShelf, type BookInsert } from '@/app/actions/shelf.actions';
 import MarkdownContent from '@/components/MarkdownContent';
 import SocialCardModal from '@/components/SocialCardModal';
+import BookCoverImage from '@/components/BookCoverImage';
+import { normalizeCoverUrl, normalizeOpenLibraryWorkId } from '@/lib/books';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import type { Book } from '@/types/database';
@@ -22,15 +24,21 @@ interface BookPageData {
 }
 
 function buildDiscoveryBookPayload(book: BookPageData['book']): BookInsert {
+  const normalizedOpenLibraryId = normalizeOpenLibraryWorkId(book.id);
+
+  if (!normalizedOpenLibraryId) {
+    throw new Error('This book is missing a valid Open Library identifier.');
+  }
+
   return {
     title: book.title,
     author: book.author,
     isbn: null,
-    cover_url: book.cover_url,
+    cover_url: normalizeCoverUrl(book.cover_url),
     description: book.description,
     published_year: book.published_year,
     genres: book.genres,
-    openlibrary_id: book.id,
+    openlibrary_id: `/works/${normalizedOpenLibraryId}`,
     cover_source: 'open_library',
     cover_id: null,
   };
@@ -44,7 +52,7 @@ export default function BookDetailPage() {
   const [saving, setSaving] = useState(false);
   const [showSocialCard, setShowSocialCard] = useState(false);
 
-  const supabase = createSupabaseBrowserClient();
+  const [supabase] = useState(() => createSupabaseBrowserClient());
 
   useEffect(() => {
     async function loadData() {
@@ -76,52 +84,23 @@ export default function BookDetailPage() {
           return;
         }
 
-        if (!params.id.startsWith('OL')) {
+        const normalizedParamsId = normalizeOpenLibraryWorkId(params.id);
+        if (!normalizedParamsId) {
           setData(null);
           return;
         }
 
-        const [bookRes, ratingsRes] = await Promise.all([
-          fetch(`https://openlibrary.org/works/${params.id}.json`),
-          fetch(`https://openlibrary.org/works/${params.id}/ratings.json`),
-        ]);
-
+        const bookRes = await fetch(`/api/v1/books/work/${normalizedParamsId}`);
         if (!bookRes.ok) {
-          throw new Error('Failed to fetch from OpenLibrary');
+          throw new Error(`Failed to fetch from Open Library with status ${bookRes.status}`);
         }
 
-        const olData = await bookRes.json();
-        const ratingsData = ratingsRes.ok ? await ratingsRes.json() : null;
-
-        let authorName = 'Unknown Author';
-        if (olData.authors?.[0]?.author?.key) {
-          const authRes = await fetch(
-            `https://openlibrary.org${olData.authors[0].author.key}.json`
-          );
-
-          if (authRes.ok) {
-            const authData = await authRes.json();
-            authorName = authData.name || authData.personal_name || 'Unknown Author';
-          }
+        const bookJson = await bookRes.json();
+        if (!bookJson.success || !bookJson.data) {
+          throw new Error(bookJson.error?.message || 'Failed to fetch from Open Library');
         }
 
-        const discoveryBook = {
-          id: params.id,
-          title: olData.title,
-          author: authorName,
-          description:
-            typeof olData.description === 'string'
-              ? olData.description
-              : olData.description?.value || '',
-          cover_url: olData.covers?.[0]
-            ? `https://covers.openlibrary.org/b/id/${olData.covers[0]}-L.jpg`
-            : null,
-          published_year: olData.first_publish_date
-            ? parseInt(olData.first_publish_date, 10)
-            : null,
-          genres: olData.subjects?.slice(0, 3) || ['Literature'],
-          rating: ratingsData?.summary?.average || 0,
-        };
+        const discoveryBook = bookJson.data;
 
         setData({ book: discoveryBook, shelfEntry: null, summary: null, isDiscovery: true });
       } catch (error) {
@@ -257,8 +236,8 @@ export default function BookDetailPage() {
         </div>
         <h1 className="text-4xl font-black tracking-tight mb-3 uppercase">Archival Error</h1>
         <p className="text-muted-foreground mb-10 max-w-sm font-medium">
-          This volume could not be located in our libraries or the global cloud. It may be
-          restricted or out of print.
+          This volume is unavailable right now. The identifier may be invalid, or Open Library may
+          have temporarily rejected the lookup.
         </p>
         <Link
           href="/home"
@@ -295,8 +274,18 @@ export default function BookDetailPage() {
         <div className="lg:col-span-4 space-y-8 lg:sticky lg:top-8 w-full">
           <div className="w-full max-w-[320px] lg:max-w-none mx-auto aspect-[2/3] bg-white shadow-2xl rounded-[2.5rem] overflow-hidden border border-black/5 relative p-1.5 transition-all">
             <div className="w-full h-full rounded-[2.2rem] overflow-hidden bg-gray-50 flex items-center justify-center">
-              {book.cover_url ? (
-                <img src={book.cover_url} className="w-full h-full object-cover" alt="Cover Art" />
+              {normalizeCoverUrl(book.cover_url) ? (
+                <div className="relative h-full w-full">
+                  <BookCoverImage
+                    title={book.title}
+                    coverUrl={book.cover_url}
+                    alt="Cover Art"
+                    fill
+                    priority
+                    sizes="(max-width: 1024px) 320px, 420px"
+                    className="object-cover"
+                  />
+                </div>
               ) : (
                 <div className="text-center p-8">
                   <BookOpen className="w-12 h-12 mx-auto mb-4 text-gray-200" />

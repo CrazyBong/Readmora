@@ -207,7 +207,7 @@ The vibe system is Readmora's signature. Each theme must feel like a complete wo
 
 ```css
 [data-vibe='sakura'] {
-  --color-bg: #f2cf2a; /* note: likely #F2CFCA — Misty Rose */
+  --color-bg: #f6d7dc; /* Soft Sakura Blush */
   --color-surface: #fadadd;
   --color-primary: #443025; /* Dark Chocolate */
   --color-secondary: #7f5836; /* Aloewood */
@@ -232,7 +232,7 @@ The vibe system is Readmora's signature. Each theme must feel like a complete wo
   --color-bg: #f5edd6; /* Cream */
   --color-surface: #fdf6e8;
   --color-primary: #c64632; /* Tomato — bold, confident */
-  --color-secondary: #C3A03; /* Note: fix to #C3A033 — Pear gold */
+  --color-secondary: #c3a033; /* Pear gold */
   --color-accent: #9aa988; /* Sage — muted, earthy accent */
   --color-muted: #f2c599; /* Honey — warm dividers */
   --color-text: #2d1a0a;
@@ -1419,7 +1419,7 @@ Each vibe's `--color-text` on `--color-bg` must hit **4.5:1 minimum** (AA for no
 | Botanical    | `#1A2108` on `#DEC59E` | Must verify ⚠️ |
 | Sakura       | `#2E1A0E` on `#F2CFCA` | ≥ 7:1 ✅       |
 | Harvest      | `#2D1A0A` on `#F5EDD6` | ≥ 8:1 ✅       |
-| Winter Frost | `#2D2E3E` on `#F8CCAA` | Must verify ⚠️ |
+| Winter Frost | `#1A202C` on `#E3E9F4` | ≥ 10:1 ✅      |
 
 Run every colour pair through [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/) before ship.
 

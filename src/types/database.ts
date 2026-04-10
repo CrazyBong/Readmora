@@ -160,16 +160,17 @@ export interface Database {
       };
       shelf_entries: {
         Row: ShelfEntry;
-        Insert: Omit<
-          ShelfEntry,
-          'id' | 'created_at' | 'updated_at' | 'summary_status' | 'last_task_id'
-        > & {
-          id?: string;
-          created_at?: string;
-          updated_at?: string;
-          summary_status?: AiTaskStatus | null;
-          last_task_id?: string | null;
-        };
+        Insert: Partial<
+          Pick<
+            ShelfEntry,
+            'rating' | 'notes' | 'started_at' | 'finished_at' | 'summary_status' | 'last_task_id'
+          >
+        > &
+          Pick<ShelfEntry, 'user_id' | 'book_id' | 'shelf'> & {
+            id?: string;
+            created_at?: string;
+            updated_at?: string;
+          };
         Update: Partial<Omit<ShelfEntry, 'id' | 'user_id' | 'book_id'>>;
       };
       ai_summaries: {
@@ -201,7 +202,9 @@ export interface Database {
       };
       ai_task_logs: {
         Row: AiTaskLog;
-        Insert: Omit<AiTaskLog, 'id' | 'created_at' | 'metadata'> & {
+        Insert: Partial<
+          Pick<AiTaskLog, 'user_id' | 'book_id' | 'task_id' | 'status' | 'error_message'>
+        > & {
           id?: string;
           created_at?: string;
           metadata?: Record<string, unknown>;

@@ -19,10 +19,14 @@ ALTER TABLE public.profiles
 ADD COLUMN IF NOT EXISTS books_count INTEGER DEFAULT 0,
 ADD COLUMN IF NOT EXISTS needs_recount BOOLEAN DEFAULT FALSE;
 
--- 3. Atomic Count RPCs: To be used by Server Actions with row-level locking
+-- 3. Atomic Count RPCs: To be used by Server Actions for single-statement atomic updates
 CREATE OR REPLACE FUNCTION public.increment_books_count(profile_id UUID)
 RETURNS void AS $$
 BEGIN
+    IF auth.role() <> 'service_role' AND auth.uid() <> profile_id THEN
+        RAISE EXCEPTION 'Not authorized to increment books_count for this profile';
+    END IF;
+
     UPDATE public.profiles
     SET books_count = books_count + 1
     WHERE id = profile_id;
@@ -32,6 +36,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 CREATE OR REPLACE FUNCTION public.decrement_books_count(profile_id UUID)
 RETURNS void AS $$
 BEGIN
+    IF auth.role() <> 'service_role' AND auth.uid() <> profile_id THEN
+        RAISE EXCEPTION 'Not authorized to decrement books_count for this profile';
+    END IF;
+
     UPDATE public.profiles
     SET books_count = GREATEST(0, books_count - 1)
     WHERE id = profile_id;
@@ -42,17 +50,23 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 CREATE OR REPLACE FUNCTION public.reconcile_dirty_profiles()
 RETURNS void AS $$
 BEGIN
+    IF auth.role() <> 'service_role' THEN
+        RAISE EXCEPTION 'Not authorized to reconcile shelf counts';
+    END IF;
+
     UPDATE public.profiles p
     SET 
-        books_count = sub.actual_count,
+        books_count = COALESCE(sub.actual_count, 0),
         needs_recount = FALSE
-    FROM (
+    FROM public.profiles dirty
+    LEFT JOIN (
         SELECT user_id, COUNT(*) as actual_count
         FROM public.shelf_entries
         GROUP BY user_id
     ) sub
-    WHERE p.id = sub.user_id 
-    AND p.needs_recount = TRUE;
+        ON sub.user_id = dirty.id
+    WHERE p.id = dirty.id
+      AND dirty.needs_recount = TRUE;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 

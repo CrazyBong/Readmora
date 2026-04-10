@@ -119,9 +119,17 @@ export const generateAiSummaryJob = inngest.createFunction(
       await step.run('mark-failed', async () => {
         const errorMessage = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
 
-        await updateShelfSummaryStatus(admin, userId, bookId, 'failed');
+        const { error: statusError } = await updateShelfSummaryStatus(
+          admin,
+          userId,
+          bookId,
+          'failed'
+        );
+        if (statusError) {
+          throw statusError;
+        }
 
-        await insertTaskLog(admin, {
+        const { error: logError } = await insertTaskLog(admin, {
           user_id: userId,
           book_id: bookId,
           task_id: null,
@@ -132,6 +140,10 @@ export const generateAiSummaryJob = inngest.createFunction(
             author,
           },
         });
+
+        if (logError) {
+          throw logError;
+        }
       });
 
       throw error;

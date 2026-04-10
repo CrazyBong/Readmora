@@ -22,7 +22,10 @@ async function markProfileDirty(
     };
   };
 
-  await profilesTable.update({ needs_recount: true }).eq('id', profileId);
+  const { error } = await profilesTable.update({ needs_recount: true }).eq('id', profileId);
+  if (error) {
+    throw error;
+  }
 }
 
 /**
@@ -73,7 +76,12 @@ async function runAudit() {
         console.warn(`  Expected: ${profile.books_count} | Actual: ${count}`);
         totalMismatches += 1;
 
-        await markProfileDirty(supabase, profile.id);
+        try {
+          await markProfileDirty(supabase, profile.id);
+        } catch (error) {
+          console.error(`Failed to mark ${profile.username || profile.id} for recount:`, error);
+          process.exitCode = 1;
+        }
       }
     }
 
@@ -92,6 +100,7 @@ async function runAudit() {
 
     if (rpcError) {
       console.error('Healing failed:', rpcError);
+      process.exit(1);
     } else {
       console.log('All counts reconciled successfully.');
     }
