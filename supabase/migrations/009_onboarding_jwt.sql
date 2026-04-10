@@ -20,7 +20,7 @@ BEGIN
   
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
 
 -- ─────────────────────────────────────────────
 -- TRIGGER: on_profile_onboarding_update
@@ -29,6 +29,7 @@ DROP TRIGGER IF EXISTS on_profile_onboarding_update ON public.profiles;
 CREATE TRIGGER on_profile_onboarding_update
   AFTER UPDATE OF onboarding_complete ON public.profiles
   FOR EACH ROW
+  WHEN (OLD.onboarding_complete IS DISTINCT FROM NEW.onboarding_complete)
   EXECUTE FUNCTION public.sync_onboarding_to_metadata();
 
 -- ─────────────────────────────────────────────

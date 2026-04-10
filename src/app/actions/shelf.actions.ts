@@ -51,7 +51,31 @@ export async function addBookToShelf(
       ...shelfData,
     });
 
+    // Check if entry already exists to determine if we should increment books_count
+    const existingEntry = await ShelfRepository.findByUserAndBook(
+      supabase,
+      user.id,
+      payload.book_id
+    );
+
     const entry = await ShelfRepository.upsert(supabase, user.id, payload);
+
+    // Atomic increment ONLY if this is a new book on the shelf
+    if (!existingEntry) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: rpcError } = await (supabase as any).rpc('increment_books_count', {
+        profile_id: user.id,
+      });
+
+      if (rpcError) {
+        logger.error(
+          { rpcError, userId: user.id },
+          'Failed to atomic increment books_count, flagging for recount'
+        );
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('profiles').update({ needs_recount: true }).eq('id', user.id);
+      }
+    }
 
     revalidatePath('/home');
     return { success: true, entry };
@@ -89,7 +113,27 @@ export async function removeBookFromShelf(bookId: string) {
       throw new AppError(ErrorCode.UNAUTHORIZED, 'Not authenticated', 401);
     }
 
-    await ShelfRepository.remove(supabase, user.id, bookId);
+    // Check if it exists before removing to determine if we should decrement
+    const existingEntry = await ShelfRepository.findByUserAndBook(supabase, user.id, bookId);
+
+    if (existingEntry) {
+      await ShelfRepository.remove(supabase, user.id, bookId);
+
+      // Atomic decrement
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: rpcError } = await (supabase as any).rpc('decrement_books_count', {
+        profile_id: user.id,
+      });
+
+      if (rpcError) {
+        logger.error(
+          { rpcError, userId: user.id },
+          'Failed to atomic decrement books_count, flagging for recount'
+        );
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('profiles').update({ needs_recount: true }).eq('id', user.id);
+      }
+    }
 
     revalidatePath('/home');
     return { success: true };

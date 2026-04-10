@@ -15,12 +15,14 @@ describe('getURL', () => {
   });
 
   it('should return localhost if no environment variables are set', () => {
+    vi.stubGlobal('window', undefined);
     delete process.env.NEXT_PUBLIC_SITE_URL;
     delete process.env.NEXT_PUBLIC_VERCEL_URL;
     expect(getURL()).toBe('http://localhost:3000');
   });
 
   it('should favor NEXT_PUBLIC_SITE_URL if set', () => {
+    vi.stubGlobal('window', undefined);
     process.env.NEXT_PUBLIC_SITE_URL = 'https://readmora.space';
     process.env.NEXT_PUBLIC_VERCEL_URL = 'readmora-preview.vercel.app';
     expect(getURL()).toBe('https://readmora.space');
@@ -46,6 +48,7 @@ describe('getURL', () => {
   });
 
   it('should use NEXT_PUBLIC_VERCEL_URL if SITE_URL is missing', () => {
+    vi.stubGlobal('window', undefined);
     delete process.env.NEXT_PUBLIC_SITE_URL;
     process.env.NEXT_PUBLIC_VERCEL_URL = 'readmora-preview.vercel.app';
     // Expect protocol enforcement
@@ -53,22 +56,26 @@ describe('getURL', () => {
   });
 
   it('should normalize paths with a leading slash', () => {
+    vi.stubGlobal('window', undefined);
     process.env.NEXT_PUBLIC_SITE_URL = 'https://readmora.space';
     expect(getURL('home')).toBe('https://readmora.space/home');
     expect(getURL('/home')).toBe('https://readmora.space/home');
   });
 
   it('should remove trailing slashes from the base URL', () => {
+    vi.stubGlobal('window', undefined);
     process.env.NEXT_PUBLIC_SITE_URL = 'https://readmora.space/';
     expect(getURL('auth')).toBe('https://readmora.space/auth');
   });
 
   it('should handle complex paths', () => {
+    vi.stubGlobal('window', undefined);
     process.env.NEXT_PUBLIC_SITE_URL = 'https://readmora.space';
     expect(getURL('/api/v1/search')).toBe('https://readmora.space/api/v1/search');
   });
 
   it('should enforce https for vercel URLs', () => {
+    vi.stubGlobal('window', undefined);
     delete process.env.NEXT_PUBLIC_SITE_URL;
     process.env.NEXT_PUBLIC_VERCEL_URL = 'readmora.vercel.app';
     expect(getURL()).toBe('https://readmora.vercel.app');

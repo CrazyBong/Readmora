@@ -35,18 +35,23 @@ export async function getOrSetCache<T>(
 
   try {
     const cached = await redis.get<T>(key);
-    if (cached) return cached;
+    if (cached !== null) return cached;
 
     const freshData = await fetchFn();
 
     // Only cache if we actually got data back
-    if (freshData && (!Array.isArray(freshData) || freshData.length > 0)) {
-      await redis.set(key, freshData, { ex: ttlSeconds });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (freshData && (!Array.isArray(freshData) || (freshData as any[]).length > 0)) {
+      try {
+        await redis.set(key, freshData, { ex: ttlSeconds });
+      } catch (setErr) {
+        console.error(`Redis set error for key "${key}":`, setErr);
+      }
     }
 
     return freshData;
   } catch (err) {
     console.error(`Redis error for key "${key}":`, err);
-    return fetchFn(); // Fail open: return fresh data if Redis fails
+    return fetchFn(); // Fail open: return fresh data if Redis get fails
   }
 }

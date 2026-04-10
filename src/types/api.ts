@@ -102,6 +102,7 @@ export interface AiSummaryResponse {
   book_id: string;
   summary_markdown: string;
   cached: boolean;
+  status?: 'queued' | 'completed' | 'failed';
   usage?: {
     used: number;
     limit: number;

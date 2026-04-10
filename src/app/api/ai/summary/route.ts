@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import { createServerClient } from '@supabase/ssr';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
-import { generateBookSummary, getISOWeekStart, getNextWeekStart } from '@/services/ai.service';
+import { getISOWeekStart, getNextWeekStart } from '@/services/ai.service';
 import {
   AiSummaryRequestSchema,
   ErrorCode,
@@ -150,7 +150,15 @@ export async function POST(request: NextRequest) {
   const finalUsageCount =
     typeof newUsageCount === 'number' && newUsageCount > 0 ? newUsageCount : usedThisWeek + 1;
 
-  // ── 8. Return cached summary ─────────────────────────────────
+  // ── 7. Check user_books status machine ───────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: shelfEntry } = await (admin.from('user_books') as any)
+    .select('summary_status')
+    .eq('user_id', user.id)
+    .eq('book_id', book_id)
+    .maybeSingle();
+
+  // ── 8. Return cached summary or queued status ────────────────
   if (cached) {
     return NextResponse.json<ApiResponse<AiSummaryResponse>>({
       success: true,
@@ -167,23 +175,52 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // ── 8. Generate new summary via Gemini ────────────────────────
-  try {
-    const result = await generateBookSummary(book.title, book.author);
+  if (shelfEntry?.summary_status === 'processing' || shelfEntry?.summary_status === 'pending') {
+    return NextResponse.json<ApiResponse<AiSummaryResponse>>({
+      success: true,
+      data: {
+        book_id,
+        summary_markdown: '',
+        cached: false,
+        status: 'queued', // UI can use this to show loading/processing
+        usage: {
+          used: finalUsageCount,
+          limit: isPremium ? Infinity : FREE_LIMIT,
+          resets_at: getNextWeekStart(),
+        },
+      },
+    });
+  }
 
-    // Cache globally
+  // ── 9. Trigger Background Job via Inngest ─────────────────────
+  try {
+    const { inngest } = await import('@/lib/inngest/client');
+
+    // Set status to PENDING in DB immediately
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (admin.from('ai_summaries') as any).upsert(
-      { book_id, summary_markdown: result.summary_markdown, model_version: result.model_version },
-      { onConflict: 'book_id' }
-    );
+    await (admin.from('user_books') as any)
+      .update({ summary_status: 'pending' })
+      .eq('user_id', user.id)
+      .eq('book_id', book_id);
+
+    await inngest.send({
+      name: 'app/ai.summary.requested',
+      data: {
+        userId: user.id,
+        bookId: book_id,
+        title: book.title,
+        author: book.author,
+        version: '1', // Incremented if user manually retries or system forces regeneration
+      },
+    });
 
     return NextResponse.json<ApiResponse<AiSummaryResponse>>({
       success: true,
       data: {
         book_id,
-        summary_markdown: result.summary_markdown,
+        summary_markdown: '',
         cached: false,
+        status: 'queued',
         usage: {
           used: finalUsageCount,
           limit: isPremium ? Infinity : FREE_LIMIT,
@@ -192,23 +229,16 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (err) {
-    const isTimeout = err instanceof Error && err.name === 'AbortError';
-    logger.error(
-      { err: isTimeout ? 'Gemini timeout' : err, book_id },
-      'AI summary generation failed'
-    );
-
+    logger.error({ err, book_id }, 'Failed to enqueue AI summary job');
     return NextResponse.json<ApiResponse<never>>(
       {
         success: false,
         error: {
-          code: ErrorCode.EXTERNAL_API_ERROR,
-          message: isTimeout
-            ? 'AI summary timed out. Please try again.'
-            : 'Failed to generate AI summary. Please try again.',
+          code: ErrorCode.INTERNAL_ERROR,
+          message: 'Background worker failure. Please try again.',
         },
       },
-      { status: 502 }
+      { status: 500 }
     );
   }
 }
