@@ -109,17 +109,10 @@ export async function middleware(request: NextRequest) {
 
   // ── Onboarding guard ─────────────────────────────────────────────
   if (user && !pathname.startsWith('/onboarding')) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('onboarding_complete')
-      .eq('id', user.id)
-      .maybeSingle(); // Use maybeSingle to prevent throw if it genuinely isn't there yet
+    // Zero-latency check via JWT metadata (synced by DB trigger)
+    const isOnboardingComplete = user.app_metadata?.onboarding_complete;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const profileData = profile as { onboarding_complete: boolean } | null;
-
-    // Missing profile OR incomplete onboarding -> Send to onboarding
-    if (!profileData || !profileData.onboarding_complete) {
+    if (!isOnboardingComplete) {
       return redirectWithCookies(new URL('/onboarding', request.url));
     }
   }
