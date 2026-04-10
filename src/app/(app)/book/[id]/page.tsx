@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Sparkles, Quote, Star, Loader2, ArrowLeft, Plus, BookOpen } from 'lucide-react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { ingestBook } from '@/lib/actions/book-actions';
 import SocialCardModal from '@/components/SocialCardModal';
@@ -35,7 +36,8 @@ function renderMarkdown(md: string): string {
     .replace(/\n/g, '<br/>');
 }
 
-export default function BookDetailPage({ params }: { params: { id: string } }) {
+export default function BookDetailPage() {
+  const params = useParams<{ id: string }>();
   const [data, setData] = useState<BookPageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);

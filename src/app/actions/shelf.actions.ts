@@ -33,7 +33,7 @@ export async function addBookToShelf(
   shelfData: Omit<AddToShelfInput, 'book_id'>
 ) {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -104,7 +104,7 @@ export async function addBookToShelf(
  */
 export async function removeBookFromShelf(bookId: string) {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -165,7 +165,7 @@ export async function importGoodreads(
   }>
 ) {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();

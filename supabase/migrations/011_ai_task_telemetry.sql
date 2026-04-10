@@ -8,9 +8,9 @@ EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
--- 2. Add status tracking to user_books (or books, depending on summary scope)
+-- 2. Add status tracking to shelf_entries
 -- We scope summary status to the user's specific shelf entry.
-ALTER TABLE public.user_books 
+ALTER TABLE public.shelf_entries 
 ADD COLUMN IF NOT EXISTS summary_status public.ai_task_status DEFAULT NULL,
 ADD COLUMN IF NOT EXISTS last_task_id text;
 

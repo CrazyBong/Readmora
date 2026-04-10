@@ -6,7 +6,7 @@ import SettingsInterface from './SettingsInterface';
 export const metadata = { title: 'Settings — Readmora' };
 
 export default async function SettingsPage() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

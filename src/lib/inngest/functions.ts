@@ -2,6 +2,23 @@ import { inngest } from './client';
 import { generateBookSummary } from '@/services/ai.service';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 
+type AiSummaryRequestedEvent = {
+  data: {
+    userId: string;
+    bookId: string;
+    title: string;
+    author: string;
+    version?: string;
+  };
+};
+
+type GenerateAiSummaryContext = {
+  event: AiSummaryRequestedEvent;
+  // Inngest step tools are runtime-provided; we keep this explicit until client-wide event/step schemas are added.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  step: any;
+};
+
 /**
  * Background job to generate an AI summary for a book.
  * Implements:
@@ -12,26 +29,19 @@ import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 export const generateAiSummaryJob = inngest.createFunction(
   {
     id: 'generate-ai-summary',
-    // Combine triggers and options for SDK v4 2-arg style
+    triggers: { event: 'app/ai.summary.requested' },
     // Use userId + bookId as idempotency key to prevent concurrent duplicate jobs for the same book
-    idempotencyKey:
-      "event.data.userId + '-' + event.data.bookId + '-' + (event.data.version || '1')",
+    idempotency: "event.data.userId + '-' + event.data.bookId + '-' + (event.data.version || '1')",
   },
-  { event: 'app/ai.summary.requested' },
-  async ({ event, step }) => {
-    const { userId, bookId, title, author } = event.data as {
-      userId: string;
-      bookId: string;
-      title: string;
-      author: string;
-    };
+  async ({ event, step }: GenerateAiSummaryContext) => {
+    const { userId, bookId, title, author } = event.data;
     const admin = createSupabaseAdminClient();
 
     // ── 1. Update status to PROCESSING ───────────────────────────
     await step.run('update-status-processing', async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (admin as any)
-        .from('user_books')
+        .from('shelf_entries')
         .update({ summary_status: 'processing' })
         .eq('user_id', userId)
         .eq('book_id', bookId);
@@ -67,7 +77,7 @@ export const generateAiSummaryJob = inngest.createFunction(
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: statusError } = await (admin as any)
-        .from('user_books')
+        .from('shelf_entries')
         .update({ summary_status: 'completed' })
         .eq('user_id', userId)
         .eq('book_id', bookId);

@@ -14,6 +14,8 @@ export type SubscriptionPlan = 'monthly' | 'annual';
 
 export type SubscriptionEventStatus = 'captured' | 'failed' | 'cancelled' | 'refunded';
 
+export type AiTaskStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
 // ─────────────────────────────────────────────
 // TABLE ROWS
 // ─────────────────────────────────────────────
@@ -29,6 +31,8 @@ export interface Profile {
   subscription_status: SubscriptionStatus;
   subscription_expires_at: string | null; // ISO timestamptz
   razorpay_customer_id: string | null;
+  books_count: number;
+  needs_recount: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -58,6 +62,8 @@ export interface ShelfEntry {
   notes: string | null;
   started_at: string | null; // ISO date
   finished_at: string | null; // ISO date
+  summary_status: AiTaskStatus | null;
+  last_task_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -99,6 +105,17 @@ export interface Vibe {
   color_muted: string;
 }
 
+export interface AiTaskLog {
+  id: string;
+  user_id: string | null;
+  book_id: string | null;
+  task_id: string | null;
+  status: AiTaskStatus | null;
+  error_message: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
 // ─────────────────────────────────────────────
 // JOINED / EXTENDED TYPES
 // ─────────────────────────────────────────────
@@ -123,7 +140,9 @@ export interface Database {
     Tables: {
       profiles: {
         Row: Profile;
-        Insert: Omit<Profile, 'created_at' | 'updated_at'> & {
+        Insert: Omit<Profile, 'created_at' | 'updated_at' | 'books_count' | 'needs_recount'> & {
+          books_count?: number;
+          needs_recount?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -141,10 +160,15 @@ export interface Database {
       };
       shelf_entries: {
         Row: ShelfEntry;
-        Insert: Omit<ShelfEntry, 'id' | 'created_at' | 'updated_at'> & {
+        Insert: Omit<
+          ShelfEntry,
+          'id' | 'created_at' | 'updated_at' | 'summary_status' | 'last_task_id'
+        > & {
           id?: string;
           created_at?: string;
           updated_at?: string;
+          summary_status?: AiTaskStatus | null;
+          last_task_id?: string | null;
         };
         Update: Partial<Omit<ShelfEntry, 'id' | 'user_id' | 'book_id'>>;
       };
@@ -174,6 +198,15 @@ export interface Database {
         Row: Vibe;
         Insert: Vibe;
         Update: Partial<Omit<Vibe, 'id'>>;
+      };
+      ai_task_logs: {
+        Row: AiTaskLog;
+        Insert: Omit<AiTaskLog, 'id' | 'created_at' | 'metadata'> & {
+          id?: string;
+          created_at?: string;
+          metadata?: Record<string, unknown>;
+        };
+        Update: Partial<Omit<AiTaskLog, 'id' | 'created_at'>>;
       };
     };
     Views: Record<string, never>;

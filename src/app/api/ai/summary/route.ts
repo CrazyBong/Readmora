@@ -150,9 +150,9 @@ export async function POST(request: NextRequest) {
   const finalUsageCount =
     typeof newUsageCount === 'number' && newUsageCount > 0 ? newUsageCount : usedThisWeek + 1;
 
-  // ── 7. Check user_books status machine ───────────────────────
+  // ── 7. Check shelf_entries status machine ────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: shelfEntry } = await (admin.from('user_books') as any)
+  const { data: shelfEntry } = await (admin.from('shelf_entries') as any)
     .select('summary_status')
     .eq('user_id', user.id)
     .eq('book_id', book_id)
@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
 
     // Set status to PENDING in DB immediately
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (admin.from('user_books') as any)
+    await (admin.from('shelf_entries') as any)
       .update({ summary_status: 'pending' })
       .eq('user_id', user.id)
       .eq('book_id', book_id);

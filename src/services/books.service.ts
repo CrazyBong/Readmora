@@ -69,7 +69,8 @@ export const BookService = {
             let isbn: string | null = null;
             if (Array.isArray(doc.isbn) && doc.isbn.length > 0) {
               const isbn13 = doc.isbn.find((i: string) => i.length === 13);
-              isbn = isbn13 || doc.isbn[0];
+              const [firstIsbn] = doc.isbn;
+              isbn = isbn13 ?? firstIsbn ?? null;
             }
 
             return {

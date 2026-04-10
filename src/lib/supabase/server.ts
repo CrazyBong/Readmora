@@ -11,8 +11,8 @@ import type { Database } from '@/types/database';
  * Uses the anon key with the user's JWT session from cookies.
  * RLS policies ARE enforced.
  */
-export function createSupabaseServerClient() {
-  const cookieStore = cookies();
+export async function createSupabaseServerClient() {
+  const cookieStore = await cookies();
 
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

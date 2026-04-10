@@ -7,7 +7,7 @@ import MobileBottomNav from '@/components/MobileBottomNav';
 import { signOut } from '@/lib/actions/auth-actions';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
