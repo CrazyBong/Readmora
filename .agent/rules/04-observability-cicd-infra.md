@@ -3,6 +3,7 @@
 ## OBSERVABILITY
 
 ### Logging (P0 in production)
+
 - Structured JSON everywhere. No `console.log` in production code. Use Pino or equivalent.
 - Every log entry: `timestamp`, `level`, `message`, `requestId`, `userId`, `environment`.
 - `error` = system broken. `warn` = unexpected but handled. `info` = business events. `debug` = off in prod.
@@ -10,6 +11,7 @@
 - Ship logs to Datadog, CloudWatch, or GCP Logging with alerting.
 
 ### Metrics & Tracing (P1)
+
 - Track: request rate, error rate, p50/p95/p99 latency, DB query time, external API latency.
 - Alerts: error rate > 1%, p99 > 2s, DB pool > 80%, any 5xx spike.
 - Track business metrics too: signups, conversions, retention.
@@ -17,6 +19,7 @@
 - Include `requestId` in every log line and `X-Request-Id` response header.
 
 ### Health Checks (P0)
+
 ```
 GET /health       → { status: 'ok', timestamp }              // shallow — load balancer
 GET /health/ready → { status: 'ok', db: 'ok', cache: 'ok' } // deep — K8s readiness
@@ -54,12 +57,13 @@ GET /health/ready → { status: 'ok', db: 'ok', cache: 'ok' } // deep — K8s re
 - Immutable infrastructure. No manual changes to prod servers. Everything is code.
 
 ### Environments
-| Environment | Purpose | Trigger |
-|---|---|---|
-| local | Dev | Manual |
-| dev | Integration | Push to `develop` |
-| staging | Pre-production | PR merge to `main` |
-| production | Live traffic | Manual gate after staging |
+
+| Environment | Purpose        | Trigger                   |
+| ----------- | -------------- | ------------------------- |
+| local       | Dev            | Manual                    |
+| dev         | Integration    | Push to `develop`         |
+| staging     | Pre-production | PR merge to `main`        |
+| production  | Live traffic   | Manual gate after staging |
 
 ---
 

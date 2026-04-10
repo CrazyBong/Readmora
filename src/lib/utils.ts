@@ -25,7 +25,7 @@ export function getURL(path: string = '') {
   }
 
   // 2. Clean and Normalize
-  url = url.includes('http') ? url : `https://${url}`;
+  url = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
   url = url.endsWith('/') ? url.slice(0, -1) : url;
 
   // 3. Append Path

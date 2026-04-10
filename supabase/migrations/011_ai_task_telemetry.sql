@@ -8,9 +8,9 @@ EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
--- 2. Add status tracking to user_books (or books, depending on summary scope)
+-- 2. Add status tracking to shelf_entries
 -- We scope summary status to the user's specific shelf entry.
-ALTER TABLE public.user_books 
+ALTER TABLE public.shelf_entries 
 ADD COLUMN IF NOT EXISTS summary_status public.ai_task_status DEFAULT NULL,
 ADD COLUMN IF NOT EXISTS last_task_id text;
 
@@ -29,3 +29,16 @@ CREATE TABLE IF NOT EXISTS public.ai_task_logs (
 -- Index for observability queries
 CREATE INDEX IF NOT EXISTS idx_ai_task_logs_status ON public.ai_task_logs(status);
 CREATE INDEX IF NOT EXISTS idx_ai_task_logs_user_book ON public.ai_task_logs(user_id, book_id);
+
+ALTER TABLE public.ai_task_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "ai_task_logs_select_own" ON public.ai_task_logs;
+CREATE POLICY "ai_task_logs_select_own"
+  ON public.ai_task_logs FOR SELECT
+  USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "ai_task_logs_service_role_all" ON public.ai_task_logs;
+CREATE POLICY "ai_task_logs_service_role_all"
+  ON public.ai_task_logs FOR ALL
+  USING (auth.role() = 'service_role')
+  WITH CHECK (auth.role() = 'service_role');

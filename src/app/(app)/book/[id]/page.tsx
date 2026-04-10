@@ -3,12 +3,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { Sparkles, Quote, Star, Loader2, ArrowLeft, Plus, BookOpen } from 'lucide-react';
 import Link from 'next/link';
-import { cn } from '@/lib/utils';
-import { ingestBook } from '@/lib/actions/book-actions';
+import { useParams } from 'next/navigation';
+import { ArrowLeft, BookOpen, Loader2, Plus, Quote, Sparkles, Star } from 'lucide-react';
+
+import { addBookToShelf, type BookInsert } from '@/app/actions/shelf.actions';
+import MarkdownContent from '@/components/MarkdownContent';
 import SocialCardModal from '@/components/SocialCardModal';
+import BookCoverImage from '@/components/BookCoverImage';
+import { normalizeCoverUrl, normalizeOpenLibraryWorkId } from '@/lib/books';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { cn } from '@/lib/utils';
+import type { Book } from '@/types/database';
 
 interface BookPageData {
   book: any;
@@ -17,32 +23,36 @@ interface BookPageData {
   isDiscovery: boolean;
 }
 
-// Simple markdown to HTML converter for bold/headers/bullets (Harden against basic script tags)
-function renderMarkdown(md: string): string {
-  if (!md) return '';
-  const safeMd = md.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, '');
-  return safeMd
-    .replace(/^### (.+)$/gm, '<h3 class="text-xl font-bold mt-8 mb-4 tracking-tight">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 class="text-2xl font-bold mt-10 mb-5 tracking-tight">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 class="text-3xl font-bold mt-12 mb-6 tracking-tight">$1</h1>')
-    .replace(
-      /\*\*(.+?)\*\*/g,
-      '<strong class="font-black text-[color:var(--color-primary)]">$1</strong>'
-    )
-    .replace(/\*(.+?)\*/g, '<em class="italic opacity-80">$1</em>')
-    .replace(/^[\-\*] (.+)$/gm, '<li class="ml-6 list-disc mb-2 pl-2">$1</li>')
-    .replace(/\n\n/g, '</p><p class="mt-4">')
-    .replace(/\n/g, '<br/>');
+function buildDiscoveryBookPayload(book: BookPageData['book']): BookInsert {
+  const normalizedOpenLibraryId = normalizeOpenLibraryWorkId(book.id);
+
+  if (!normalizedOpenLibraryId) {
+    throw new Error('This book is missing a valid Open Library identifier.');
+  }
+
+  return {
+    title: book.title,
+    author: book.author,
+    isbn: null,
+    cover_url: normalizeCoverUrl(book.cover_url),
+    description: book.description,
+    published_year: book.published_year,
+    genres: book.genres,
+    openlibrary_id: `/works/${normalizedOpenLibraryId}`,
+    cover_source: 'open_library',
+    cover_id: null,
+  };
 }
 
-export default function BookDetailPage({ params }: { params: { id: string } }) {
+export default function BookDetailPage() {
+  const params = useParams<{ id: string }>();
   const [data, setData] = useState<BookPageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showSocialCard, setShowSocialCard] = useState(false);
 
-  const supabase = createSupabaseBrowserClient();
+  const [supabase] = useState(() => createSupabaseBrowserClient());
 
   useEffect(() => {
     async function loadData() {
@@ -52,11 +62,12 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
           data: { user },
         } = await supabase.auth.getUser();
 
-        const { data: localBook } = await supabase
+        const localBookResult = await supabase
           .from('books')
           .select('*')
           .eq('id', params.id)
           .maybeSingle();
+        const localBook = localBookResult.data as Book | null;
 
         if (localBook) {
           const [{ data: shelfEntry }, { data: summary }] = await Promise.all([
@@ -64,65 +75,87 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
               .from('shelf_entries')
               .select('*')
               .eq('user_id', user?.id ?? '')
-              .eq('book_id', (localBook as any).id)
+              .eq('book_id', localBook.id)
               .maybeSingle(),
-            supabase
-              .from('ai_summaries')
-              .select('*')
-              .eq('book_id', (localBook as any).id)
-              .maybeSingle(),
+            supabase.from('ai_summaries').select('*').eq('book_id', localBook.id).maybeSingle(),
           ]);
+
           setData({ book: localBook, shelfEntry, summary, isDiscovery: false });
-        } else if (params.id.startsWith('OL')) {
-          const [bookRes, ratingsRes] = await Promise.all([
-            fetch(`https://openlibrary.org/works/${params.id}.json`),
-            fetch(`https://openlibrary.org/works/${params.id}/ratings.json`),
-          ]);
-
-          if (!bookRes.ok) throw new Error('Failed to fetch from OpenLibrary');
-          const olData = await bookRes.json();
-          const ratingsData = ratingsRes.ok ? await ratingsRes.json() : null;
-
-          let authorName = 'Unknown Author';
-          if (olData.authors?.[0]?.author?.key) {
-            const authRes = await fetch(
-              `https://openlibrary.org${olData.authors[0].author.key}.json`
-            );
-            if (authRes.ok) {
-              const authData = await authRes.json();
-              authorName = authData.name || authData.personal_name || 'Unknown Author';
-            }
-          }
-
-          const discoveryBook = {
-            id: params.id,
-            title: olData.title,
-            author: authorName,
-            description:
-              typeof olData.description === 'string'
-                ? olData.description
-                : olData.description?.value || '',
-            cover_url: olData.covers?.[0]
-              ? `https://covers.openlibrary.org/b/id/${olData.covers[0]}-L.jpg`
-              : null,
-            published_year: olData.first_publish_date ? parseInt(olData.first_publish_date) : null,
-            genres: olData.subjects?.slice(0, 3) || ['Literature'],
-            rating: ratingsData?.summary?.average || 0,
-          };
-
-          setData({ book: discoveryBook, shelfEntry: null, summary: null, isDiscovery: true });
-        } else {
-          setData(null);
+          return;
         }
-      } catch (e) {
-        console.error('Hybrid Load Error:', e);
+
+        const normalizedParamsId = normalizeOpenLibraryWorkId(params.id);
+        if (!normalizedParamsId) {
+          setData(null);
+          return;
+        }
+
+        const bookRes = await fetch(`/api/v1/books/work/${normalizedParamsId}`);
+        if (!bookRes.ok) {
+          throw new Error(`Failed to fetch from Open Library with status ${bookRes.status}`);
+        }
+
+        const bookJson = await bookRes.json();
+        if (!bookJson.success || !bookJson.data) {
+          throw new Error(bookJson.error?.message || 'Failed to fetch from Open Library');
+        }
+
+        const discoveryBook = bookJson.data;
+
+        setData({ book: discoveryBook, shelfEntry: null, summary: null, isDiscovery: true });
+      } catch (error) {
+        console.error('Hybrid Load Error:', error);
         setData(null);
       } finally {
         setLoading(false);
       }
     }
-    loadData();
+
+    void loadData();
   }, [params.id, supabase]);
+
+  const fetchPersistedBook = async (bookId: string): Promise<Book | null> => {
+    const { data: savedBook, error } = await supabase
+      .from('books')
+      .select('*')
+      .eq('id', bookId)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    return savedBook as Book | null;
+  };
+
+  const persistDiscoveryBook = async () => {
+    if (!data?.book) {
+      throw new Error('Book not found');
+    }
+
+    const addResult = await addBookToShelf(buildDiscoveryBookPayload(data.book), {
+      shelf: 'want_to_read',
+    });
+
+    if (!addResult.success || !('entry' in addResult) || !addResult.entry) {
+      throw new Error(addResult.error || 'Please login to save books');
+    }
+
+    const savedBook = await fetchPersistedBook(addResult.entry.book_id);
+
+    setData((previous) =>
+      previous
+        ? {
+            ...previous,
+            book: savedBook ?? previous.book,
+            isDiscovery: false,
+            shelfEntry: addResult.entry,
+          }
+        : null
+    );
+
+    return addResult.entry.book_id;
+  };
 
   const handleGenerateAI = async () => {
     if (!data?.book || generating) return;
@@ -131,31 +164,10 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
     let currentBookId = data.book.id;
 
     try {
-      // ── 1. If it's a discovery book, save it first ─────────
       if (data.isDiscovery) {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) throw new Error('Please login to analyze books');
-
-        const { data: newBook, error: ingestErr } = await ingestBook({
-          title: data.book.title,
-          author: data.book.author,
-          cover_url: data.book.cover_url,
-          description: data.book.description,
-          published_year: data.book.published_year,
-          genres: data.book.genres,
-          openlibrary_id: data.book.id,
-        });
-
-        if (ingestErr) throw ingestErr;
-        currentBookId = (newBook as any).id;
-
-        // Update local state to show it's now saved
-        setData((prev) => (prev ? { ...prev, book: newBook, isDiscovery: false } : null));
+        currentBookId = await persistDiscoveryBook();
       }
 
-      // ── 2. Trigger AI Summary ──────────────────────────────
       const res = await fetch('/api/ai/summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -174,11 +186,10 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
         throw new Error(json?.error?.message || 'Failed to generate analysis');
       }
 
-      // Update local state with the new summary
-      setData((prev) =>
-        prev
+      setData((previous) =>
+        previous
           ? {
-              ...prev,
+              ...previous,
               summary: {
                 summary_markdown: json.data.summary_markdown,
                 model_version: json.data.model_version,
@@ -186,8 +197,8 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
             }
           : null
       );
-    } catch (e: any) {
-      alert(e.message || 'AI Analysis failed to launch');
+    } catch (error: any) {
+      alert(error.message || 'AI Analysis failed to launch');
     } finally {
       setGenerating(false);
     }
@@ -196,39 +207,11 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
   const handleSaveToLibrary = async () => {
     if (!data?.book || !data.isDiscovery) return;
     setSaving(true);
+
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error('Please login to save books');
-
-      // Ingest via server action (RLS bypass)
-      const { data: newBook, error: ingestErr } = await ingestBook({
-        title: data.book.title,
-        author: data.book.author,
-        cover_url: data.book.cover_url,
-        description: data.book.description,
-        published_year: data.book.published_year,
-        genres: data.book.genres,
-        openlibrary_id: data.book.id,
-      });
-
-      if (ingestErr) throw ingestErr;
-
-      const { error: shelfErr } = await supabase.from('shelf_entries').insert({
-        user_id: user.id,
-        book_id: (newBook as any).id,
-        shelf: 'want_to_read',
-      } as any);
-
-      if (shelfErr) throw shelfErr;
-      setData((prev) =>
-        prev
-          ? { ...prev, book: newBook, isDiscovery: false, shelfEntry: { shelf: 'want_to_read' } }
-          : null
-      );
-    } catch (e: any) {
-      alert(e.message || 'Failed to save book');
+      await persistDiscoveryBook();
+    } catch (error: any) {
+      alert(error.message || 'Failed to save book');
     } finally {
       setSaving(false);
     }
@@ -253,8 +236,8 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
         </div>
         <h1 className="text-4xl font-black tracking-tight mb-3 uppercase">Archival Error</h1>
         <p className="text-muted-foreground mb-10 max-w-sm font-medium">
-          This volume could not be located in our libraries or the global cloud. It may be
-          restricted or out of print.
+          This volume is unavailable right now. The identifier may be invalid, or Open Library may
+          have temporarily rejected the lookup.
         </p>
         <Link
           href="/home"
@@ -268,11 +251,13 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
 
   const { book, shelfEntry, summary, isDiscovery } = data;
 
-  const extractQuote = (md: string) => {
-    if (!md) return '';
+  const extractQuote = (markdown: string) => {
+    if (!markdown) return '';
+
     const quoteMatch =
-      md.match(/5\.\s*(?:One memorable quote:?\s*)?["'“](.+?)["'”]/i) ||
-      md.match(/(?:Quote|Memorable Quote):?\s*["'“](.+?)["'”]/i);
+      markdown.match(/5\.\s*(?:One memorable quote:?\s*)?["'](.+?)["']/i) ||
+      markdown.match(/(?:Quote|Memorable Quote):?\s*["'](.+?)["']/i);
+
     return quoteMatch ? quoteMatch[1] || '' : '';
   };
 
@@ -286,12 +271,21 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
       </Link>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-start">
-        {/* ── Left Column: Responsive Cover ────────────────── */}
         <div className="lg:col-span-4 space-y-8 lg:sticky lg:top-8 w-full">
           <div className="w-full max-w-[320px] lg:max-w-none mx-auto aspect-[2/3] bg-white shadow-2xl rounded-[2.5rem] overflow-hidden border border-black/5 relative p-1.5 transition-all">
             <div className="w-full h-full rounded-[2.2rem] overflow-hidden bg-gray-50 flex items-center justify-center">
-              {book.cover_url ? (
-                <img src={book.cover_url} className="w-full h-full object-cover" alt="Cover Art" />
+              {normalizeCoverUrl(book.cover_url) ? (
+                <div className="relative h-full w-full">
+                  <BookCoverImage
+                    title={book.title}
+                    coverUrl={book.cover_url}
+                    alt="Cover Art"
+                    fill
+                    priority
+                    sizes="(max-width: 1024px) 320px, 420px"
+                    className="object-cover"
+                  />
+                </div>
               ) : (
                 <div className="text-center p-8">
                   <BookOpen className="w-12 h-12 mx-auto mb-4 text-gray-200" />
@@ -353,17 +347,15 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
           </div>
         </div>
 
-        {/* ── Right Column: Content Architecture ───────────── */}
         <div className="lg:col-span-8 space-y-12">
-          {/* Header Section */}
           <div className="space-y-6 text-center lg:text-left">
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2.5">
-              {(book.genres || ['Literature']).slice(0, 3).map((g: string) => (
+              {(book.genres || ['Literature']).slice(0, 3).map((genre: string) => (
                 <span
-                  key={g}
+                  key={genre}
                   className="px-5 py-2 bg-white border border-black/5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm hover:border-[color:var(--color-primary)]/30 transition-colors cursor-default"
                 >
-                  {g}
+                  {genre}
                 </span>
               ))}
             </div>
@@ -378,7 +370,6 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
             </div>
           </div>
 
-          {/* Stats & Metadata Matrix */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-2 md:px-0">
             <div className="bg-white/40 border border-black/5 text-center px-4 py-6 rounded-[2rem] shadow-sm flex flex-col justify-center min-h-[110px]">
               <p className="text-[10px] uppercase font-black text-foreground tracking-widest mb-2">
@@ -393,10 +384,14 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
                 Rating
               </p>
               <div className="flex justify-center gap-0.5">
-                {[1, 2, 3, 4, 5].map((i) => (
+                {[1, 2, 3, 4, 5].map((index) => (
                   <Star
-                    key={i}
-                    className={`w-3.5 h-3.5 ${book.rating > 0 && i <= Math.round(book.rating) ? 'fill-yellow-400 text-yellow-400' : 'fill-gray-100 text-gray-200'}`}
+                    key={index}
+                    className={`w-3.5 h-3.5 ${
+                      book.rating > 0 && index <= Math.round(book.rating)
+                        ? 'fill-yellow-400 text-yellow-400'
+                        : 'fill-gray-100 text-gray-200'
+                    }`}
                   />
                 ))}
               </div>
@@ -422,7 +417,6 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
             </div>
           </div>
 
-          {/* Narrative Core */}
           <section className="bg-white border-2 border-black/5 rounded-[3.5rem] p-8 md:p-14 shadow-sm relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-12 pointer-events-none opacity-[0.02] group-hover:opacity-10 transition-opacity">
               <Quote className="w-56 h-56 rotate-12" />
@@ -431,18 +425,17 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
               Profile Archive <Sparkles className="w-7 h-7 text-yellow-500 opacity-30" />
             </h3>
             <div className="space-y-6 max-w-4xl relative z-10">
-              <div
-                className="leading-relaxed text-foreground/75 text-lg md:text-xl font-medium prose prose-stone max-w-none selection:bg-yellow-100 selection:text-black"
-                dangerouslySetInnerHTML={{
-                  __html: summary
-                    ? `<p class="mt-2">${renderMarkdown(summary.summary_markdown)}</p>`
-                    : book.description || `No narrative description available for this entry.`,
-                }}
+              <MarkdownContent
+                className="text-foreground/75 text-lg md:text-xl font-medium prose prose-stone max-w-none selection:bg-yellow-100 selection:text-black"
+                content={
+                  summary?.summary_markdown ||
+                  book.description ||
+                  'No narrative description available for this entry.'
+                }
               />
             </div>
           </section>
 
-          {/* Accessory Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div
               onClick={async () => {

@@ -15,7 +15,7 @@ import { ZodError } from 'zod';
  */
 export async function checkUsername(username: string): Promise<boolean> {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     // Validate string pattern first
     if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
       return false;
@@ -33,7 +33,7 @@ export async function checkUsername(username: string): Promise<boolean> {
  */
 export async function submitOnboarding(input: CompleteOnboardingInput) {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();

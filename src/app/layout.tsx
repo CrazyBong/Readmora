@@ -91,7 +91,7 @@ export default async function RootLayout({
   let vibe = 'wildflower';
 
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();

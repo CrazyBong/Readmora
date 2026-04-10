@@ -42,7 +42,9 @@ export async function middleware(request: NextRequest) {
   // ── Public routes that never need auth ──────────────────────────
   const isPublicRoute =
     pathname === '/' ||
+    pathname.startsWith('/health') ||
     pathname.startsWith('/login') ||
+    pathname.startsWith('/signup') ||
     pathname.startsWith('/auth/') ||
     pathname.startsWith('/api/v1/books/search') || // public book search
     pathname.startsWith('/_next') ||
@@ -83,7 +85,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Authenticated users should not see the login page ───────────
-  if (user && pathname.startsWith('/login')) {
+  if (user && (pathname.startsWith('/login') || pathname.startsWith('/signup'))) {
     const nextPath = request.nextUrl.searchParams.get('next');
     let target = '/home';
 
@@ -109,8 +111,14 @@ export async function middleware(request: NextRequest) {
 
   // ── Onboarding guard ─────────────────────────────────────────────
   if (user && !pathname.startsWith('/onboarding')) {
-    // Zero-latency check via JWT metadata (synced by DB trigger)
-    const isOnboardingComplete = user.app_metadata?.onboarding_complete;
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('onboarding_complete')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    const profileData = profile as { onboarding_complete: boolean } | null;
+    const isOnboardingComplete = profileData?.onboarding_complete ?? false;
 
     if (!isOnboardingComplete) {
       return redirectWithCookies(new URL('/onboarding', request.url));

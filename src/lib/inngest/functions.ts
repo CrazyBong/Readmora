@@ -1,80 +1,152 @@
-import { inngest } from './client';
-import { generateBookSummary } from '@/services/ai.service';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { generateBookSummary } from '@/services/ai.service';
+import type { PostgrestError } from '@supabase/supabase-js';
+import type { Database, ShelfEntry } from '@/types/database';
 
-/**
- * Background job to generate an AI summary for a book.
- * Implements:
- * 1. Versioned Idempotency prunes duplicate runs but allows retries.
- * 2. Database State Machine updates (Processing -> Completed/Failed).
- * 3. Decoupled error telemetry.
- */
+import { inngest } from './client';
+
+type AiSummaryRequestedEvent = {
+  data: {
+    userId: string;
+    bookId: string;
+    title: string;
+    author: string;
+    version?: string;
+  };
+};
+
+type GenerateAiSummaryContext = {
+  event: AiSummaryRequestedEvent;
+  // Inngest step tools are runtime-provided; we keep this explicit until client-wide event/step schemas are added.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  step: any;
+};
+
+async function updateShelfSummaryStatus(
+  client: ReturnType<typeof createSupabaseAdminClient>,
+  userId: string,
+  bookId: string,
+  status: ShelfEntry['summary_status']
+): Promise<{ error: PostgrestError | null }> {
+  const shelfTable = client.from('shelf_entries') as unknown as {
+    update: (values: { summary_status: ShelfEntry['summary_status'] }) => {
+      eq: (
+        column: 'user_id',
+        value: string
+      ) => {
+        eq: (column: 'book_id', value: string) => Promise<{ error: PostgrestError | null }>;
+      };
+    };
+  };
+
+  return shelfTable.update({ summary_status: status }).eq('user_id', userId).eq('book_id', bookId);
+}
+
+async function upsertAiSummary(
+  client: ReturnType<typeof createSupabaseAdminClient>,
+  values: Database['public']['Tables']['ai_summaries']['Insert']
+): Promise<{ error: PostgrestError | null }> {
+  const summariesTable = client.from('ai_summaries') as unknown as {
+    upsert: (
+      summary: Database['public']['Tables']['ai_summaries']['Insert'],
+      options: { onConflict: string }
+    ) => Promise<{ error: PostgrestError | null }>;
+  };
+
+  return summariesTable.upsert(values, { onConflict: 'book_id' });
+}
+
+async function insertTaskLog(
+  client: ReturnType<typeof createSupabaseAdminClient>,
+  values: Database['public']['Tables']['ai_task_logs']['Insert']
+): Promise<{ error: PostgrestError | null }> {
+  const taskLogTable = client.from('ai_task_logs') as unknown as {
+    insert: (
+      log: Database['public']['Tables']['ai_task_logs']['Insert']
+    ) => Promise<{ error: PostgrestError | null }>;
+  };
+
+  return taskLogTable.insert(values);
+}
+
 export const generateAiSummaryJob = inngest.createFunction(
   {
     id: 'generate-ai-summary',
-    // Combine triggers and options for SDK v4 2-arg style
-    // Use userId + bookId as idempotency key to prevent concurrent duplicate jobs for the same book
-    idempotencyKey:
-      "event.data.userId + '-' + event.data.bookId + '-' + (event.data.version || '1')",
+    triggers: { event: 'app/ai.summary.requested' },
+    idempotency: "event.data.userId + '-' + event.data.bookId + '-' + (event.data.version || '1')",
   },
-  { event: 'app/ai.summary.requested' },
-  async ({ event, step }) => {
-    const { userId, bookId, title, author } = event.data as {
-      userId: string;
-      bookId: string;
-      title: string;
-      author: string;
-    };
+  async ({ event, step }: GenerateAiSummaryContext) => {
+    const { userId, bookId, title, author } = event.data;
     const admin = createSupabaseAdminClient();
 
-    // ── 1. Update status to PROCESSING ───────────────────────────
-    await step.run('update-status-processing', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (admin as any)
-        .from('user_books')
-        .update({ summary_status: 'processing' })
-        .eq('user_id', userId)
-        .eq('book_id', bookId);
+    try {
+      await step.run('update-status-processing', async () => {
+        const { error } = await updateShelfSummaryStatus(admin, userId, bookId, 'processing');
 
-      if (error) throw error;
-    });
+        if (error) throw error;
+      });
 
-    // ── 2. Call AI Service with timeout ──────────────────────────
-    const result = await step.run('generate-summary', async () => {
-      // Logic from services/ai.service.ts
-      // We wrap it in a timeout to ensure it doesn't hang forever
-      const summaryResult = await Promise.race([
-        generateBookSummary(title, author),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('AI_TIMEOUT')), 60000)),
-      ]);
+      const result = await step.run('generate-summary', async () => {
+        const summaryResult = await Promise.race([
+          generateBookSummary(title, author),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('AI_TIMEOUT')), 60000)),
+        ]);
 
-      return summaryResult as { summary_markdown: string; model_version: string };
-    });
+        return summaryResult as { summary_markdown: string; model_version: string };
+      });
 
-    // ── 3. Save to Global Cache and Update Status ────────────────
-    await step.run('save-result', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: upsertError } = await (admin.from('ai_summaries') as any).upsert(
-        {
+      await step.run('save-result', async () => {
+        const { error: upsertError } = await upsertAiSummary(admin, {
           book_id: bookId,
           summary_markdown: result.summary_markdown,
           model_version: result.model_version,
-        },
-        { onConflict: 'book_id' }
-      );
+        });
 
-      if (upsertError) throw upsertError;
+        if (upsertError) throw upsertError;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: statusError } = await (admin as any)
-        .from('user_books')
-        .update({ summary_status: 'completed' })
-        .eq('user_id', userId)
-        .eq('book_id', bookId);
+        const { error: statusError } = await updateShelfSummaryStatus(
+          admin,
+          userId,
+          bookId,
+          'completed'
+        );
 
-      if (statusError) throw statusError;
-    });
+        if (statusError) throw statusError;
+      });
 
-    return { success: true, bookId };
+      return { success: true, bookId };
+    } catch (error) {
+      await step.run('mark-failed', async () => {
+        const errorMessage = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
+
+        const { error: statusError } = await updateShelfSummaryStatus(
+          admin,
+          userId,
+          bookId,
+          'failed'
+        );
+        if (statusError) {
+          throw statusError;
+        }
+
+        const { error: logError } = await insertTaskLog(admin, {
+          user_id: userId,
+          book_id: bookId,
+          task_id: null,
+          status: 'failed',
+          error_message: errorMessage,
+          metadata: {
+            title,
+            author,
+          },
+        });
+
+        if (logError) {
+          throw logError;
+        }
+      });
+
+      throw error;
+    }
   }
 );

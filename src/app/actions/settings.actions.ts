@@ -12,7 +12,7 @@ import { isValidVibe } from '@/lib/books';
 
 export async function updateVibePreference(vibe_preference: VibeId) {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -41,7 +41,7 @@ export async function updateProfile(updates: {
   avatarUrl?: string | null;
 }) {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();

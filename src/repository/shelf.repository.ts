@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { ShelfEntry, ShelfEntryWithBook, ShelfType } from '@/types/database';
+import type { Database, ShelfEntry, ShelfEntryWithBook, ShelfType } from '@/types/database';
 import type { AddToShelfInput } from '@/types/api';
 import { AppError } from '@/lib/error';
 import { logger } from '@/lib/logger';
@@ -7,6 +7,7 @@ import { ErrorCode } from '@/types/api';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyClient = SupabaseClient<any>;
+type ShelfEntryInsert = Database['public']['Tables']['shelf_entries']['Insert'];
 
 export const ShelfRepository = {
   async findByUserAndShelf(
@@ -104,10 +105,7 @@ export const ShelfRepository = {
     }
   },
 
-  async batchUpsert(
-    db: AnyClient,
-    entries: Array<Omit<ShelfEntry, 'id' | 'created_at' | 'updated_at'> & { id?: string }>
-  ): Promise<{ count: number }> {
+  async batchUpsert(db: AnyClient, entries: ShelfEntryInsert[]): Promise<{ count: number }> {
     if (entries.length === 0) return { count: 0 };
 
     const { error, count } = await db

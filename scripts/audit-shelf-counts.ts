@@ -1,69 +1,113 @@
 import { createSupabaseAdminClient } from '../src/lib/supabase/admin';
+import type { Profile } from '../src/types/database';
+import type { PostgrestError } from '@supabase/supabase-js';
+
+const PAGE_SIZE = 500;
+type AuditProfile = Pick<Profile, 'id' | 'username' | 'books_count'>;
+
+async function callAuditRpc(
+  client: ReturnType<typeof createSupabaseAdminClient>,
+  fn: string
+): Promise<{ error: PostgrestError | null }> {
+  return client.rpc(fn as never) as unknown as Promise<{ error: PostgrestError | null }>;
+}
+
+async function markProfileDirty(
+  client: ReturnType<typeof createSupabaseAdminClient>,
+  profileId: string
+): Promise<void> {
+  const profilesTable = client.from('profiles') as unknown as {
+    update: (values: { needs_recount: boolean }) => {
+      eq: (column: 'id', value: string) => Promise<{ error: PostgrestError | null }>;
+    };
+  };
+
+  const { error } = await profilesTable.update({ needs_recount: true }).eq('id', profileId);
+  if (error) {
+    throw error;
+  }
+}
 
 /**
  * Data Integrity Audit Script
- * Compares denormalized profiles.books_count against actual COUNT(user_books).
- * Logs mismatches and provides a command to fix them.
+ * Compares denormalized profiles.books_count against actual COUNT(shelf_entries).
+ * Logs mismatches and triggers reconciliation only for profiles that drifted.
  */
 async function runAudit() {
-    const supabase = createSupabaseAdminClient();
-    console.log('🚀 Starting Data Integrity Audit: Shelf Counts...');
+  const supabase = createSupabaseAdminClient();
+  console.log('Starting Data Integrity Audit: Shelf Counts...');
 
-    // 1. Fetch all profiles where count might be drifting
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let totalMismatches = 0;
+  let page = 0;
+
+  while (true) {
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
     const { data: profiles, error } = await supabase
-        .from('profiles')
-        .select('id, username, books_count') as any;
+      .from('profiles')
+      .select('id, username, books_count')
+      .order('id', { ascending: true })
+      .range(from, to)
+      .returns<AuditProfile[]>();
 
     if (error) {
-        console.error('❌ Failed to fetch profiles:', error);
-        process.exit(1);
+      console.error('Failed to fetch profiles:', error);
+      process.exit(1);
     }
 
-    let totalMismatches = 0;
-
-    for (const profile of (profiles as any[])) {
-        // 2. Get actual count
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { count, error: countError } = await (supabase
-            .from('user_books') as any)
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', profile.id);
-
-        if (countError) {
-            console.error(`❌ Error counting for ${profile.username || profile.id}:`, countError);
-            continue;
-        }
-
-        if (count !== profile.books_count) {
-            console.warn(`⚠️ Mismatch found for ${profile.username || profile.id}:`);
-            console.warn(`   Expected: ${profile.books_count} | Actual: ${count}`);
-            totalMismatches++;
-
-            // Mark as dirty so the reconciliation RPC can fix it
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase
-                .from('profiles') as any)
-                .update({ needs_recount: true })
-                .eq('id', profile.id);
-        }
+    if (!profiles || profiles.length === 0) {
+      break;
     }
 
-    if (totalMismatches > 0) {
-        console.log(`\n🚨 Audit Complete: ${totalMismatches} mismatches discovered.`);
-        console.log('💡 Running healing process...');
+    for (const profile of profiles) {
+      const { count, error: countError } = await supabase
+        .from('shelf_entries')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', profile.id);
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: rpcError } = await (supabase as any).rpc('reconcile_dirty_profiles');
+      if (countError) {
+        console.error(`Error counting for ${profile.username || profile.id}:`, countError);
+        continue;
+      }
 
-        if (rpcError) {
-            console.error('❌ Healing failed:', rpcError);
-        } else {
-            console.log('✅ All counts reconciled successfully.');
+      if (count !== profile.books_count) {
+        console.warn(`Mismatch found for ${profile.username || profile.id}:`);
+        console.warn(`  Expected: ${profile.books_count} | Actual: ${count}`);
+        totalMismatches += 1;
+
+        try {
+          await markProfileDirty(supabase, profile.id);
+        } catch (error) {
+          console.error(`Failed to mark ${profile.username || profile.id} for recount:`, error);
+          process.exitCode = 1;
         }
+      }
+    }
+
+    if (profiles.length < PAGE_SIZE) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  if (totalMismatches > 0) {
+    console.log(`\nAudit Complete: ${totalMismatches} mismatches discovered.`);
+    console.log('Running healing process...');
+
+    const { error: rpcError } = await callAuditRpc(supabase, 'reconcile_dirty_profiles');
+
+    if (rpcError) {
+      console.error('Healing failed:', rpcError);
+      process.exit(1);
     } else {
-        console.log('\n✨ Audit Complete: All counts are perfectly in sync.');
+      console.log('All counts reconciled successfully.');
     }
+    return;
+  }
+
+  console.log('\nAudit Complete: All counts are perfectly in sync.');
 }
 
-runAudit();
+void runAudit();
