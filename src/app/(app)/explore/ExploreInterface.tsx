@@ -22,8 +22,9 @@ import {
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { ingestBook } from '@/lib/actions/book-actions';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { addBookToShelf, type BookInsert } from '@/app/actions/shelf.actions';
+import BookCoverImage from '@/components/BookCoverImage';
+import { normalizeCoverUrl, normalizeOpenLibraryWorkId } from '@/lib/books';
 import { useScrollDirection } from '@/hooks/useScrollDirection';
 
 interface SearchResult {
@@ -36,12 +37,16 @@ interface SearchResult {
   isSaved?: boolean;
 }
 
-interface OpenLibraryDoc {
-  key: string;
-  title: string;
-  author_name?: string[];
-  cover_i?: number;
-  ratings_average?: number;
+function buildSearchResultKey(book: BookInsert, index: number) {
+  const normalizedOpenLibraryId = normalizeOpenLibraryWorkId(book.openlibrary_id);
+  if (normalizedOpenLibraryId) {
+    return normalizedOpenLibraryId;
+  }
+
+  const normalizedCoverUrl = normalizeCoverUrl(book.cover_url) ?? 'no-cover';
+  const title = book.title.trim().toLowerCase();
+  const author = book.author.trim().toLowerCase();
+  return `${title}::${author}::${normalizedCoverUrl}::${index}`;
 }
 
 // ── 25 Genre Tags with background images ─────────────────────────────────────
@@ -302,7 +307,7 @@ export default function ExploreInterface() {
   const searchRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const supabase = createSupabaseBrowserClient();
+  const searchAbortRef = useRef<AbortController | null>(null);
   const { scrollDirection } = useScrollDirection('main');
 
   // Close overlays on click outside
@@ -319,9 +324,16 @@ export default function ExploreInterface() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  useEffect(() => {
+    return () => searchAbortRef.current?.abort();
+  }, []);
+
   const handleSearch = useCallback(
     async (searchQuery: string, label?: string, coverImg?: string) => {
       if (!searchQuery.trim()) return;
+      searchAbortRef.current?.abort();
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
       setSearchFocused(false);
       setFilterOpen(false);
       setIsLoading(true);
@@ -342,25 +354,36 @@ export default function ExploreInterface() {
 
       try {
         const res = await fetch(
-          `https://openlibrary.org/search.json?q=${encodeURIComponent(searchQuery)}&limit=30&fields=key,title,author_name,cover_i,ratings_average`
+          `/api/v1/books/search?q=${encodeURIComponent(searchQuery)}&limit=30`,
+          {
+            signal: controller.signal,
+          }
         );
+        if (!res.ok) {
+          throw new Error(`Search request failed with status ${res.status}`);
+        }
         const data = await res.json();
+        if (controller.signal.aborted) return;
+
+        const books = Array.isArray(data.data) ? (data.data as BookInsert[]) : [];
         setResults(
-          (data.docs || [])
-            .filter((d: OpenLibraryDoc) => d.cover_i)
-            .map((doc: OpenLibraryDoc) => ({
-              id: doc.key,
-              title: doc.title,
-              author: doc.author_name?.[0] ?? 'Unknown Author',
-              cover_url: `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`,
-              openlibrary_id: doc.key.split('/')[2],
-              rating: doc.ratings_average,
-            }))
+          books.map((book, index) => ({
+            id: buildSearchResultKey(book, index),
+            title: book.title,
+            author: book.author,
+            cover_url: normalizeCoverUrl(book.cover_url) ?? '',
+            openlibrary_id: normalizeOpenLibraryWorkId(book.openlibrary_id) ?? '',
+            isSaved: false,
+          }))
         );
       } catch (e) {
-        console.error(e);
+        if (!(e instanceof Error && e.name === 'AbortError')) {
+          console.error(e);
+        }
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
       }
     },
     []
@@ -382,25 +405,31 @@ export default function ExploreInterface() {
 
   const handleQuickSave = async (book: SearchResult) => {
     if (savingId) return;
+    const normalizedOpenLibraryId = normalizeOpenLibraryWorkId(book.openlibrary_id);
+    if (!normalizedOpenLibraryId) {
+      alert('This book is missing a valid Open Library identifier and cannot be saved yet.');
+      return;
+    }
     setSavingId(book.id);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error('Login to save');
-      const { data: newBook, error: ingestErr } = await ingestBook({
-        title: book.title,
-        author: book.author,
-        cover_url: book.cover_url,
-        openlibrary_id: book.openlibrary_id,
-      });
-      if (ingestErr) throw ingestErr;
-      if (newBook && 'id' in newBook) {
-        await supabase.from('shelf_entries').insert({
-          user_id: user.id,
-          book_id: (newBook as { id: string }).id,
-          shelf: 'want_to_read',
-        } as any);
+      const result = await addBookToShelf(
+        {
+          title: book.title,
+          author: book.author,
+          isbn: null,
+          cover_url: book.cover_url || null,
+          description: null,
+          published_year: null,
+          genres: [],
+          openlibrary_id: `/works/${normalizedOpenLibraryId}`,
+          cover_source: 'open_library',
+          cover_id: null,
+        },
+        { shelf: 'want_to_read', rating: undefined }
+      );
+
+      if (!result.success) {
+        throw new Error(result.error || 'Login to save');
       }
       setResults((prev) => prev.map((b) => (b.id === book.id ? { ...b, isSaved: true } : b)));
     } catch (e: any) {
@@ -743,44 +772,72 @@ export default function ExploreInterface() {
             {/* Results Grid */}
             {!isLoading && (
               <div className="columns-2 sm:columns-3 md:columns-4 lg:columns-5 gap-5 space-y-8 pb-32">
-                {results.map((book) => (
+                {results.map((book, index) => (
                   <div
                     key={book.id}
                     className="break-inside-avoid group cursor-pointer mb-5 animate-in fade-in slide-in-from-bottom-4 duration-300"
                   >
-                    <Link href={`/book/${book.openlibrary_id}`} className="block">
-                      <div className="relative rounded-[2rem] overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 bg-gray-50 border border-black/5">
+                    {book.openlibrary_id ? (
+                      <Link href={`/book/${book.openlibrary_id}`} className="block">
+                        <div className="relative rounded-[2rem] overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 bg-gray-50 border border-black/5">
+                          <div className="aspect-[2/3] relative">
+                            <BookCoverImage
+                              title={book.title}
+                              coverUrl={book.cover_url}
+                              fill
+                              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                              className="object-cover transition-all duration-700 group-hover:scale-105 group-hover:brightness-90"
+                              priority={index < 4}
+                            />
+                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (!book.isSaved) handleQuickSave(book);
+                                }}
+                                disabled={
+                                  savingId === book.id || book.isSaved || !book.openlibrary_id
+                                }
+                                className={cn(
+                                  'absolute top-4 right-4 text-white px-5 py-2.5 rounded-full font-black text-xs shadow-xl transform active:scale-95 transition-all flex items-center gap-1.5',
+                                  book.isSaved ? 'bg-green-600' : 'bg-red-600 hover:bg-red-700'
+                                )}
+                              >
+                                {savingId === book.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : book.isSaved ? (
+                                  <Check className="w-3.5 h-3.5" />
+                                ) : null}
+                                {book.isSaved ? 'Saved' : 'Save'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    ) : (
+                      <div
+                        className="relative rounded-[2rem] overflow-hidden border border-dashed border-black/10 bg-gray-50/70 opacity-80"
+                        aria-disabled="true"
+                        title="This result is missing a valid Open Library page"
+                      >
                         <div className="aspect-[2/3] relative">
-                          <img
-                            src={book.cover_url}
-                            alt={book.title}
-                            className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105 group-hover:brightness-90"
-                            loading="lazy"
+                          <BookCoverImage
+                            title={book.title}
+                            coverUrl={book.cover_url}
+                            fill
+                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                            className="object-cover"
+                            priority={index < 4}
                           />
-                          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                if (!book.isSaved) handleQuickSave(book);
-                              }}
-                              disabled={savingId === book.id || book.isSaved}
-                              className={cn(
-                                'absolute top-4 right-4 text-white px-5 py-2.5 rounded-full font-black text-xs shadow-xl transform active:scale-95 transition-all flex items-center gap-1.5',
-                                book.isSaved ? 'bg-green-600' : 'bg-red-600 hover:bg-red-700'
-                              )}
-                            >
-                              {savingId === book.id ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : book.isSaved ? (
-                                <Check className="w-3.5 h-3.5" />
-                              ) : null}
-                              {book.isSaved ? 'Saved' : 'Save'}
-                            </button>
+                          <div className="absolute inset-x-0 bottom-0 bg-black/70 px-4 py-3 text-center">
+                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">
+                              Detail Page Unavailable
+                            </p>
                           </div>
                         </div>
                       </div>
-                    </Link>
+                    )}
                     <div className="mt-3 px-1">
                       <h3 className="text-sm font-bold text-gray-900 truncate leading-snug hover:underline underline-offset-2 transition-all">
                         {book.title}

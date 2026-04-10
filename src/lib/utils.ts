@@ -10,29 +10,25 @@ export function cn(...inputs: ClassValue[]) {
  * Prevents "localhost:3000" leaks in production and handles trailing slashes strictly.
  */
 export function getURL(path: string = '') {
-  let url =
-    process.env.NEXT_PUBLIC_SITE_URL ?? // Set this to your site URL in production
-    process.env.NEXT_PUBLIC_VERCEL_URL; // Automatically set by Vercel for preview/prod
+  // 1. Determine the base URL
+  let url: string;
 
-  // Handle Browser context: Favor the current origin over a potential "localhost" env var fallback
   if (typeof window !== 'undefined') {
-    const origin = window.location.origin;
-    // If env var is missing OR it's pointing to localhost while we are on a real domain
-    if (!url || (url.includes('localhost') && !origin.includes('localhost'))) {
-      url = origin;
-    }
+    // In the browser, always favor the current origin (localhost stays localhost)
+    url = window.location.origin;
+  } else {
+    // On the server (SSR), use env vars
+    url =
+      process.env.NEXT_PUBLIC_SITE_URL ??
+      process.env.NEXT_PUBLIC_VERCEL_URL ??
+      'http://localhost:3000';
   }
 
-  // Final fallback to localhost if nothing else works
-  url = url || 'http://localhost:3000';
-
-  // Make sure to include `https://` when not localhost.
-  url = url.includes('http') ? url : `https://${url}`;
-  // Remove trailing slashes
+  // 2. Clean and Normalize
+  url = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
   url = url.endsWith('/') ? url.slice(0, -1) : url;
 
-  // Add leading slash to path if missing
+  // 3. Append Path
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-
   return path ? `${url}${normalizedPath}` : url;
 }

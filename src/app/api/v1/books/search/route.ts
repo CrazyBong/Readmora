@@ -13,6 +13,8 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q');
+    const limitParam = searchParams.get('limit');
+    const limit = limitParam ? Number.parseInt(limitParam, 10) : undefined;
 
     if (!query || query.trim().length === 0) {
       return NextResponse.json<ApiResponse<never>>(
@@ -24,12 +26,29 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const books = await BookService.searchOpenLibrary(query.trim());
+    const normalizedLimit = Number.isNaN(limit ?? Number.NaN) ? undefined : limit;
+    if (normalizedLimit !== undefined && normalizedLimit < 1) {
+      return NextResponse.json<ApiResponse<never>>(
+        {
+          success: false,
+          error: {
+            code: ErrorCode.VALIDATION_ERROR,
+            message: 'Query parameter "limit" must be at least 1',
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    const books = await BookService.searchOpenLibrary(
+      query.trim(),
+      normalizedLimit ? { limit: normalizedLimit } : undefined
+    );
 
     return NextResponse.json<ApiResponse<typeof books>>({
       success: true,
       data: books,
-      meta: { total: books.length },
+      meta: { returned: books.length, limit: normalizedLimit ?? 10 },
     });
   } catch (error) {
     logger.error({ err: error }, '/api/v1/books/search failed');

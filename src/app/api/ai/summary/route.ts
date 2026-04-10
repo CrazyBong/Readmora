@@ -1,23 +1,78 @@
 import { type NextRequest, NextResponse } from 'next/server';
+
 export const dynamic = 'force-dynamic';
 
 import { createServerClient } from '@supabase/ssr';
+import type { PostgrestError } from '@supabase/supabase-js';
+
+import { FREE_AI_SUMMARY_LIMIT, PREMIUM_AI_SUMMARY_LIMIT } from '@/lib/ai-usage';
+import { logger } from '@/lib/logger';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
-import { generateBookSummary, getISOWeekStart, getNextWeekStart } from '@/services/ai.service';
+import { getISOWeekStart, getNextWeekStart } from '@/services/ai.service';
 import {
   AiSummaryRequestSchema,
   ErrorCode,
-  type ApiResponse,
   type AiSummaryResponse,
+  type ApiResponse,
   type RateLimitExceededResponse,
 } from '@/types/api';
-import type { Database } from '@/types/database';
-import { logger } from '@/lib/logger';
+import type { AiSummary, AiUsage, Database, Profile, ShelfEntry } from '@/types/database';
 
-const FREE_LIMIT = 3;
+function buildUsage(isPremium: boolean, used: number) {
+  return {
+    used,
+    limit: isPremium ? PREMIUM_AI_SUMMARY_LIMIT : FREE_AI_SUMMARY_LIMIT,
+    resets_at: getNextWeekStart(),
+  };
+}
+
+async function callAdminRpc<T>(
+  client: ReturnType<typeof createSupabaseAdminClient>,
+  fn: string,
+  args: Record<string, unknown>
+): Promise<{ data: T | null; error: PostgrestError | null }> {
+  return client.rpc(fn as never, args as never) as unknown as Promise<{
+    data: T | null;
+    error: PostgrestError | null;
+  }>;
+}
+
+async function updateShelfSummaryStatus(
+  client: ReturnType<typeof createSupabaseAdminClient>,
+  userId: string,
+  bookId: string,
+  status: ShelfEntry['summary_status']
+): Promise<{ data: { id: string } | null; error: PostgrestError | null }> {
+  const shelfTable = client.from('shelf_entries') as unknown as {
+    update: (values: { summary_status: ShelfEntry['summary_status'] }) => {
+      eq: (
+        column: 'user_id',
+        value: string
+      ) => {
+        eq: (
+          column: 'book_id',
+          value: string
+        ) => {
+          select: (columns: 'id') => {
+            maybeSingle: () => Promise<{
+              data: { id: string } | null;
+              error: PostgrestError | null;
+            }>;
+          };
+        };
+      };
+    };
+  };
+
+  return shelfTable
+    .update({ summary_status: status })
+    .eq('user_id', userId)
+    .eq('book_id', bookId)
+    .select('id')
+    .maybeSingle();
+}
 
 export async function POST(request: NextRequest) {
-  // ── 1. Authenticate user ──────────────────────────────────────
   const supabaseResponse = NextResponse.next({ request });
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -37,14 +92,17 @@ export async function POST(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
   if (!user) {
     return NextResponse.json<ApiResponse<never>>(
-      { success: false, error: { code: ErrorCode.UNAUTHORIZED, message: 'Not authenticated' } },
+      {
+        success: false,
+        error: { code: ErrorCode.UNAUTHORIZED, message: 'Not authenticated' },
+      },
       { status: 401 }
     );
   }
 
-  // ── 2. Validate body ──────────────────────────────────────────
   let body: unknown;
   try {
     body = await request.json();
@@ -66,65 +124,172 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  const { book_id } = parsed.data;
 
+  const { book_id } = parsed.data;
   const admin = createSupabaseAdminClient();
 
-  // ── 3. Fetch book metadata ────────────────────────────────────
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: book } = await (admin.from('books') as any)
+  const bookResult = await admin
+    .from('books')
     .select('id, title, author')
     .eq('id', book_id)
     .maybeSingle();
+  const book = bookResult.data as Pick<
+    Database['public']['Tables']['books']['Row'],
+    'id' | 'title' | 'author'
+  > | null;
 
   if (!book) {
     return NextResponse.json<ApiResponse<never>>(
-      { success: false, error: { code: ErrorCode.NOT_FOUND, message: 'Book not found' } },
+      {
+        success: false,
+        error: { code: ErrorCode.NOT_FOUND, message: 'Book not found' },
+      },
       { status: 404 }
     );
   }
 
-  // ── 4. Check user rate limit profile ─────────────────────────
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: profile } = await (admin.from('profiles') as any)
+  const profileResult = await admin
+    .from('profiles')
     .select('subscription_status, subscription_expires_at')
     .eq('id', user.id)
     .maybeSingle();
+  const profile = profileResult.data as Pick<
+    Profile,
+    'subscription_status' | 'subscription_expires_at'
+  > | null;
 
   const isPremium =
     profile?.subscription_status === 'premium' &&
     (!profile.subscription_expires_at || new Date(profile.subscription_expires_at) > new Date());
+  const usageLimit = isPremium ? PREMIUM_AI_SUMMARY_LIMIT : FREE_AI_SUMMARY_LIMIT;
 
   const weekStart = getISOWeekStart();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: usage } = await (admin.from('ai_usage') as any)
+  const usageResult = await admin
+    .from('ai_usage')
     .select('usage_count')
     .eq('user_id', user.id)
     .eq('week_start', weekStart)
     .maybeSingle();
+  const usage = usageResult.data as Pick<AiUsage, 'usage_count'> | null;
 
   const usedThisWeek = usage?.usage_count ?? 0;
 
-  // ── 5. Check global summary cache ────────────────────────────
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: cached } = await (admin.from('ai_summaries') as any)
+  const cachedResult = await admin
+    .from('ai_summaries')
     .select('summary_markdown, model_version')
     .eq('book_id', book_id)
     .maybeSingle();
+  const cached = cachedResult.data as Pick<AiSummary, 'summary_markdown' | 'model_version'> | null;
 
-  // ── 6. Enforce rate limit (Atomic via RPC) ────────────────────
-  // We increment usage here. If it's already cached, it still counts as a use.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: newUsageCount, error: rpcError } = await (admin as any).rpc('increment_ai_usage', {
-    p_user_id: user.id,
-    p_week_start: weekStart,
-    p_max_limit: isPremium ? 999999 : FREE_LIMIT,
-  });
+  const shelfEntryResult = await admin
+    .from('shelf_entries')
+    .select('summary_status')
+    .eq('user_id', user.id)
+    .eq('book_id', book_id)
+    .maybeSingle();
+  const shelfEntry = shelfEntryResult.data as Pick<ShelfEntry, 'summary_status'> | null;
 
-  if (rpcError || newUsageCount === -1) {
-    const used = newUsageCount === -1 ? FREE_LIMIT : usedThisWeek;
-    if (newUsageCount === -1 || (rpcError && !isPremium && usedThisWeek >= FREE_LIMIT)) {
+  if (cached) {
+    return NextResponse.json<ApiResponse<AiSummaryResponse>>({
+      success: true,
+      data: {
+        book_id,
+        summary_markdown: cached.summary_markdown,
+        cached: true,
+        usage: buildUsage(isPremium, usedThisWeek),
+      },
+    });
+  }
+
+  if (!shelfEntry) {
+    const { error: ensureShelfError } = await callAdminRpc<boolean>(
+      admin,
+      'upsert_shelf_entry_and_sync_count',
+      {
+        p_user_id: user.id,
+        p_book_id: book_id,
+        p_shelf: 'want_to_read',
+        p_rating: null,
+        p_notes: null,
+        p_started_at: null,
+        p_finished_at: null,
+      }
+    );
+
+    if (ensureShelfError) {
+      logger.error(
+        { ensureShelfError, book_id, userId: user.id },
+        'Failed to ensure shelf entry before AI summary'
+      );
+      return NextResponse.json<ApiResponse<never>>(
+        {
+          success: false,
+          error: {
+            code: ErrorCode.INTERNAL_ERROR,
+            message: 'Unable to prepare this book for AI analysis. Please try again.',
+          },
+        },
+        { status: 500 }
+      );
+    }
+  }
+
+  const currentShelfEntryResult = await admin
+    .from('shelf_entries')
+    .select('summary_status')
+    .eq('user_id', user.id)
+    .eq('book_id', book_id)
+    .maybeSingle();
+  const currentShelfEntry = currentShelfEntryResult.data as Pick<
+    ShelfEntry,
+    'summary_status'
+  > | null;
+  const shelfEntryError = currentShelfEntryResult.error;
+
+  if (shelfEntryError) {
+    logger.error({ shelfEntryError, book_id, userId: user.id }, 'Failed to read shelf entry state');
+    return NextResponse.json<ApiResponse<never>>(
+      {
+        success: false,
+        error: {
+          code: ErrorCode.INTERNAL_ERROR,
+          message: 'Unable to inspect AI summary state. Please try again.',
+        },
+      },
+      { status: 500 }
+    );
+  }
+
+  if (
+    currentShelfEntry?.summary_status === 'processing' ||
+    currentShelfEntry?.summary_status === 'pending'
+  ) {
+    return NextResponse.json<ApiResponse<AiSummaryResponse>>({
+      success: true,
+      data: {
+        book_id,
+        summary_markdown: '',
+        cached: false,
+        status: 'queued',
+        usage: buildUsage(isPremium, usedThisWeek),
+      },
+    });
+  }
+
+  const { data: newUsageCount, error: usageError } = await callAdminRpc<number>(
+    admin,
+    'increment_ai_usage',
+    {
+      p_user_id: user.id,
+      p_week_start: weekStart,
+      p_max_limit: usageLimit,
+    }
+  );
+
+  if (usageError || newUsageCount === -1) {
+    const used = newUsageCount === -1 ? usageLimit : usedThisWeek;
+
+    if (newUsageCount === -1 || (usageError && usedThisWeek >= usageLimit)) {
       return NextResponse.json<ApiResponse<RateLimitExceededResponse>>(
         {
           success: false,
@@ -133,82 +298,91 @@ export async function POST(request: NextRequest) {
             message: 'Weekly AI summary limit reached',
             details: {
               code: 'RATE_LIMIT_EXCEEDED',
-              used: used,
-              limit: FREE_LIMIT,
+              used,
+              limit: usageLimit,
               resets_at: getNextWeekStart(),
-              upgrade_required: true,
+              upgrade_required: !isPremium,
             },
           },
         },
         { status: 429 }
       );
     }
-    // If RPC fails but we aren't sure about the limit, we'll log and continue for now (fail-open for UX, or fail-closed for cost)
-    logger.error({ err: rpcError }, 'Atomic usage increment failed');
+
+    logger.error({ err: usageError, userId: user.id }, 'Atomic usage increment failed');
   }
 
   const finalUsageCount =
     typeof newUsageCount === 'number' && newUsageCount > 0 ? newUsageCount : usedThisWeek + 1;
 
-  // ── 8. Return cached summary ─────────────────────────────────
-  if (cached) {
-    return NextResponse.json<ApiResponse<AiSummaryResponse>>({
-      success: true,
-      data: {
-        book_id,
-        summary_markdown: cached.summary_markdown,
-        cached: true,
-        usage: {
-          used: finalUsageCount,
-          limit: isPremium ? Infinity : FREE_LIMIT,
-          resets_at: getNextWeekStart(),
-        },
-      },
-    });
-  }
-
-  // ── 8. Generate new summary via Gemini ────────────────────────
   try {
-    const result = await generateBookSummary(book.title, book.author);
+    const { inngest } = await import('@/lib/inngest/client');
 
-    // Cache globally
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (admin.from('ai_summaries') as any).upsert(
-      { book_id, summary_markdown: result.summary_markdown, model_version: result.model_version },
-      { onConflict: 'book_id' }
+    const { data: pendingRow, error: pendingError } = await updateShelfSummaryStatus(
+      admin,
+      user.id,
+      book_id,
+      'pending'
     );
+
+    if (pendingError || !pendingRow) {
+      logger.error(
+        { pendingError, book_id, userId: user.id },
+        'Failed to set summary_status pending'
+      );
+      return NextResponse.json<ApiResponse<never>>(
+        {
+          success: false,
+          error: {
+            code: ErrorCode.INTERNAL_ERROR,
+            message: 'Unable to queue AI analysis right now. Please try again.',
+          },
+        },
+        { status: 500 }
+      );
+    }
+
+    await inngest.send({
+      name: 'app/ai.summary.requested',
+      data: {
+        userId: user.id,
+        bookId: book_id,
+        title: book.title,
+        author: book.author,
+        version: '1',
+      },
+    });
 
     return NextResponse.json<ApiResponse<AiSummaryResponse>>({
       success: true,
       data: {
         book_id,
-        summary_markdown: result.summary_markdown,
+        summary_markdown: '',
         cached: false,
-        usage: {
-          used: finalUsageCount,
-          limit: isPremium ? Infinity : FREE_LIMIT,
-          resets_at: getNextWeekStart(),
-        },
+        status: 'queued',
+        usage: buildUsage(isPremium, finalUsageCount),
       },
     });
-  } catch (err) {
-    const isTimeout = err instanceof Error && err.name === 'AbortError';
-    logger.error(
-      { err: isTimeout ? 'Gemini timeout' : err, book_id },
-      'AI summary generation failed'
-    );
+  } catch (error) {
+    logger.error({ err: error, book_id, userId: user.id }, 'Failed to enqueue AI summary job');
+
+    const { error: rollbackError } = await updateShelfSummaryStatus(admin, user.id, book_id, null);
+    if (rollbackError) {
+      logger.error(
+        { rollbackError, book_id, userId: user.id },
+        'Failed to roll back summary_status after enqueue failure'
+      );
+    }
 
     return NextResponse.json<ApiResponse<never>>(
       {
         success: false,
         error: {
-          code: ErrorCode.EXTERNAL_API_ERROR,
-          message: isTimeout
-            ? 'AI summary timed out. Please try again.'
-            : 'Failed to generate AI summary. Please try again.',
+          code: ErrorCode.INTERNAL_ERROR,
+          message: 'Background worker failure. Please try again.',
         },
       },
-      { status: 502 }
+      { status: 500 }
     );
   }
 }

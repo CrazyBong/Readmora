@@ -26,13 +26,13 @@ const VIBES: { id: VibeId; name: string; preview: string; color: string; primary
     name: 'Winter Frost',
     preview: 'Cool dawn with rosewood accents',
     color: '#E3E9F4',
-    primary: '#4A5568',
+    primary: '#1A202C',
   },
   {
     id: 'sakura',
     name: 'Sakura',
     preview: 'Warm floral with chocolate tones',
-    color: '#F2CFCA',
+    color: '#F6D7DC',
     primary: '#443025',
   },
   {

@@ -74,7 +74,11 @@ export type CompleteOnboardingInput = z.infer<typeof CompleteOnboardingSchema>;
 // ─────────────────────────────────────────────
 
 export type ApiResponse<T> =
-  | { success: true; data: T; meta?: { total?: number; page?: number; limit?: number } }
+  | {
+      success: true;
+      data: T;
+      meta?: { total?: number; returned?: number; page?: number; limit?: number; work_id?: string };
+    }
   | { success: false; error: { code: string; message: string; details?: unknown } };
 
 // ─────────────────────────────────────────────
@@ -102,6 +106,7 @@ export interface AiSummaryResponse {
   book_id: string;
   summary_markdown: string;
   cached: boolean;
+  status?: 'queued' | 'completed' | 'failed';
   usage?: {
     used: number;
     limit: number;

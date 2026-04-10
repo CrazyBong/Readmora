@@ -5,7 +5,7 @@ export function getBookOpenLibraryId(title: string, author: string, isbn?: strin
   if (isbn) {
     return `/works/isbn/${isbn}`;
   }
-  // Fallback for books without ISBN: deterministic slug
+
   const slug = `${title}-${author}`.toLowerCase().replace(/[^a-z0-9]+/g, '-');
   return `/works/local/${slug}`;
 }
@@ -24,4 +24,31 @@ export type ValidVibe = (typeof VALID_VIBES)[number];
 
 export function isValidVibe(vibe: string): vibe is ValidVibe {
   return VALID_VIBES.includes(vibe as ValidVibe);
+}
+
+export function normalizeOpenLibraryWorkId(value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  const trimmedValue = value.trim();
+  if (!trimmedValue) return null;
+
+  if (/^OL[\w]+W$/i.test(trimmedValue)) {
+    return trimmedValue.toUpperCase();
+  }
+
+  const workMatch = trimmedValue.match(/\/works\/(OL[\w]+W)$/i);
+  if (workMatch?.[1]) {
+    return workMatch[1].toUpperCase();
+  }
+
+  return null;
+}
+
+export function normalizeCoverUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  const trimmedValue = value.trim();
+  if (!trimmedValue) return null;
+
+  return trimmedValue;
 }

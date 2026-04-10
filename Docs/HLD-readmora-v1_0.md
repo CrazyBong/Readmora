@@ -52,6 +52,7 @@ At launch, the system is designed for ~1,000 concurrent users and 10,000 MAU wit
 ### 2.1 Goals
 
 **Functional Goals**
+
 - Allow users to sign up via Google OAuth or Email/Password and complete a 5-step onboarding in under 3 minutes
 - Provide four reading shelves (Want to Read, Currently Reading, Finished, DNF) with full CRUD operations
 - Deliver AI-generated book summaries (themes, writing style, audience fit) via Gemini API within 8 seconds for uncached and under 1 second for cached requests
@@ -62,6 +63,7 @@ At launch, the system is designed for ~1,000 concurrent users and 10,000 MAU wit
 - Support basic book search by title and author via the Open Library API
 
 **Non-Functional Goals**
+
 - Page LCP < 2.5s on a 4G connection
 - AI summary response < 8s (fresh), < 1s (cached)
 - System availability ≥ 99.5% (combined Vercel + Supabase SLA)
@@ -74,6 +76,7 @@ At launch, the system is designed for ~1,000 concurrent users and 10,000 MAU wit
 ### 2.2 Non-Goals
 
 **Out of scope for v1:**
+
 - Native iOS or Android applications (responsive web covers mobile in v1)
 - Social features: follows, public feeds, reviews feed, or community discussions
 - AI-generated personalised reading recommendations
@@ -84,6 +87,7 @@ At launch, the system is designed for ~1,000 concurrent users and 10,000 MAU wit
 - Full admin dashboard UI (Supabase Studio used for internal ops in v1)
 
 **Deferred to future phases:**
+
 - Reading streaks, gamification, and annual reading-wrapped reports
 - Native mobile apps (React Native)
 - AI recommendations based on shelf + vibe
@@ -91,18 +95,18 @@ At launch, the system is designed for ~1,000 concurrent users and 10,000 MAU wit
 
 ### 2.3 Success Metrics
 
-| Metric | Target | Measurement Method |
-|---|---|---|
-| Registered Users | 10,000 | Month 6 post-launch |
-| DAU/MAU Ratio | ≥ 25% | PostHog analytics |
-| Onboarding Completion Rate | ≥ 75% | PostHog funnel |
-| AI Summary p95 Response (cached) | < 1s | Vercel function logs |
-| AI Summary p95 Response (fresh) | < 8s | Vercel function logs |
-| Home Feed LCP | < 2.5s | Core Web Vitals / Vercel Analytics |
-| Free-to-Premium Conversion | ≥ 15% | Month 12 — Razorpay + DB |
-| AI Usage Cost / Free User | < ₹2/month | Gemini API billing |
-| System Availability | ≥ 99.5% | Vercel + Supabase uptime dashboards |
-| Goodreads Import Completion | ≥ 40% of eligible users | PostHog event |
+| Metric                           | Target                  | Measurement Method                  |
+| -------------------------------- | ----------------------- | ----------------------------------- |
+| Registered Users                 | 10,000                  | Month 6 post-launch                 |
+| DAU/MAU Ratio                    | ≥ 25%                   | PostHog analytics                   |
+| Onboarding Completion Rate       | ≥ 75%                   | PostHog funnel                      |
+| AI Summary p95 Response (cached) | < 1s                    | Vercel function logs                |
+| AI Summary p95 Response (fresh)  | < 8s                    | Vercel function logs                |
+| Home Feed LCP                    | < 2.5s                  | Core Web Vitals / Vercel Analytics  |
+| Free-to-Premium Conversion       | ≥ 15%                   | Month 12 — Razorpay + DB            |
+| AI Usage Cost / Free User        | < ₹2/month              | Gemini API billing                  |
+| System Availability              | ≥ 99.5%                 | Vercel + Supabase uptime dashboards |
+| Goodreads Import Completion      | ≥ 40% of eligible users | PostHog event                       |
 
 ---
 
@@ -160,14 +164,14 @@ At launch, the system is designed for ~1,000 concurrent users and 10,000 MAU wit
 
 ### 4.1 Architectural Style & Justification
 
-| Pattern | Chosen? | Reason |
-|---|---|---|
-| Serverless Monolith | ✅ Yes | Single Next.js 14 app on Vercel. 1–2 engineers cannot maintain distributed services. Vercel serverless functions provide per-route scaling without ops overhead. |
-| Microservices | ❌ No | Unjustified complexity for an MVP team of 1–2. No independent scaling requirements between components at this stage. |
-| Event-Driven / Message Queue | ❌ No | No sustained async workloads requiring queue durability. Webhook handling and cron jobs are handled inline by Vercel serverless functions and Supabase cron. |
-| Traditional Serverful Monolith | ❌ No | No dedicated server to manage. Vercel abstracts infra entirely — optimal for a zero-ops team. |
-| CQRS | ❌ No | Read/write patterns are simple enough for a single Postgres schema. Premature for v1 scale. |
-| Event Sourcing | ❌ No | No audit trail requirements beyond payment logs. Adds complexity with no v1 benefit. |
+| Pattern                        | Chosen? | Reason                                                                                                                                                           |
+| ------------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Serverless Monolith            | ✅ Yes  | Single Next.js 14 app on Vercel. 1–2 engineers cannot maintain distributed services. Vercel serverless functions provide per-route scaling without ops overhead. |
+| Microservices                  | ❌ No   | Unjustified complexity for an MVP team of 1–2. No independent scaling requirements between components at this stage.                                             |
+| Event-Driven / Message Queue   | ❌ No   | No sustained async workloads requiring queue durability. Webhook handling and cron jobs are handled inline by Vercel serverless functions and Supabase cron.     |
+| Traditional Serverful Monolith | ❌ No   | No dedicated server to manage. Vercel abstracts infra entirely — optimal for a zero-ops team.                                                                    |
+| CQRS                           | ❌ No   | Read/write patterns are simple enough for a single Postgres schema. Premature for v1 scale.                                                                      |
+| Event Sourcing                 | ❌ No   | No audit trail requirements beyond payment logs. Adds complexity with no v1 benefit.                                                                             |
 
 > 📌 Assumption: The team is 1–2 engineers with a strong Next.js background. The serverless monolith pattern is the only viable choice that meets the 8-week MVP timeline without sacrificing production readiness.
 
@@ -222,23 +226,23 @@ At launch, the system is designed for ~1,000 concurrent users and 10,000 MAU wit
 
 ### 4.3 Technology Stack
 
-| Layer | Technology | Justification |
-|---|---|---|
-| Frontend Framework | Next.js 14 (App Router) | Server components, ISR, API routes in one framework. Best-in-class DX for React teams. |
-| UI Library | React 19 | Latest stable; concurrent features beneficial for streamed AI responses. |
-| Styling | Tailwind CSS 4 | Utility-first; pairs naturally with Next.js. Custom properties enable runtime vibe theming. |
-| Language | TypeScript (strict mode) | Type safety across full stack. Shared types between API routes and components. |
-| Auth | Supabase Auth | OAuth + Email out of the box; JWT sessions; RLS integration. Eliminates auth build entirely. |
-| Primary Database | Supabase (Postgres 15) | Managed Postgres with RLS, real-time, and Storage in one platform. No separate DB infra to run. |
-| Object Storage | Supabase Storage | Avatar images. Co-located with DB reduces latency; managed signed URLs. |
-| AI | Google Gemini 1.5 Flash | Free tier (15 RPM) sufficient with global caching. High-quality literary analysis. Low cost at scale. |
-| Payments | Razorpay | India-first; UPI + cards + netbanking; INR pricing; webhook SDK well-documented. |
-| Email | Resend | Simple REST API; generous free tier (3,000 emails/month). Next.js-native integrations. |
-| Book Metadata | Open Library API | Free, no API key, extensive ISBN coverage. Covers 90%+ of expected book searches. |
-| Hosting / Serverless | Vercel | Zero-ops deployment for Next.js. Global edge CDN. Auto-scaling serverless functions. |
-| Analytics | PostHog | Privacy-first. Self-hostable in future. Free tier adequate for v1. Funnel + event tracking. |
-| CSV Parsing | PapaParse (client-side) | Parses Goodreads CSV in-browser. No raw reading history ever transits to server. |
-| CI/CD | GitHub Actions | Native to Git workflow. Free for open/private repos at this scale. |
+| Layer                | Technology               | Justification                                                                                         |
+| -------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Frontend Framework   | Next.js 14 (App Router)  | Server components, ISR, API routes in one framework. Best-in-class DX for React teams.                |
+| UI Library           | React 19                 | Latest stable; concurrent features beneficial for streamed AI responses.                              |
+| Styling              | Tailwind CSS 4           | Utility-first; pairs naturally with Next.js. Custom properties enable runtime vibe theming.           |
+| Language             | TypeScript (strict mode) | Type safety across full stack. Shared types between API routes and components.                        |
+| Auth                 | Supabase Auth            | OAuth + Email out of the box; JWT sessions; RLS integration. Eliminates auth build entirely.          |
+| Primary Database     | Supabase (Postgres 15)   | Managed Postgres with RLS, real-time, and Storage in one platform. No separate DB infra to run.       |
+| Object Storage       | Supabase Storage         | Avatar images. Co-located with DB reduces latency; managed signed URLs.                               |
+| AI                   | Google Gemini 1.5 Flash  | Free tier (15 RPM) sufficient with global caching. High-quality literary analysis. Low cost at scale. |
+| Payments             | Razorpay                 | India-first; UPI + cards + netbanking; INR pricing; webhook SDK well-documented.                      |
+| Email                | Resend                   | Simple REST API; generous free tier (3,000 emails/month). Next.js-native integrations.                |
+| Book Metadata        | Open Library API         | Free, no API key, extensive ISBN coverage. Covers 90%+ of expected book searches.                     |
+| Hosting / Serverless | Vercel                   | Zero-ops deployment for Next.js. Global edge CDN. Auto-scaling serverless functions.                  |
+| Analytics            | PostHog                  | Privacy-first. Self-hostable in future. Free tier adequate for v1. Funnel + event tracking.           |
+| CSV Parsing          | PapaParse (client-side)  | Parses Goodreads CSV in-browser. No raw reading history ever transits to server.                      |
+| CI/CD                | GitHub Actions           | Native to Git workflow. Free for open/private repos at this scale.                                    |
 
 ---
 
@@ -248,23 +252,24 @@ At launch, the system is designed for ~1,000 concurrent users and 10,000 MAU wit
 
 ### NextjsFrontend
 
-**Type**            : Service (SSR + Static)
-**Responsibility**  : Renders all user-facing UI using React Server Components and Client Components; owns routing, vibe theme system, and client-side CSV parsing.
-**Owned By**        : Platform Engineering
+**Type** : Service (SSR + Static)
+**Responsibility** : Renders all user-facing UI using React Server Components and Client Components; owns routing, vibe theme system, and client-side CSV parsing.
+**Owned By** : Platform Engineering
 **Language/Runtime**: TypeScript / React 19 / Next.js 14
-**Scales**          : Horizontally (Vercel edge replicas — automatic)
-**Stateful**        : No (state managed in Supabase or browser session)
+**Scales** : Horizontally (Vercel edge replicas — automatic)
+**Stateful** : No (state managed in Supabase or browser session)
 
 #### Interfaces
 
-| Interface | Protocol | Direction | Consumer / Producer |
-|---|---|---|---|
-| Page Requests | HTTPS | Inbound | End User (Browser) |
-| API Route Calls | HTTPS (fetch) | Outbound | NextjsApiRoutes |
-| Supabase JS Client | HTTPS (REST / WebSocket) | Outbound | Supabase Auth + DB |
-| PostHog SDK | HTTPS | Outbound | PostHog Analytics |
+| Interface          | Protocol                 | Direction | Consumer / Producer |
+| ------------------ | ------------------------ | --------- | ------------------- |
+| Page Requests      | HTTPS                    | Inbound   | End User (Browser)  |
+| API Route Calls    | HTTPS (fetch)            | Outbound  | NextjsApiRoutes     |
+| Supabase JS Client | HTTPS (REST / WebSocket) | Outbound  | Supabase Auth + DB  |
+| PostHog SDK        | HTTPS                    | Outbound  | PostHog Analytics   |
 
 #### Key Responsibilities
+
 - Render all pages: landing, onboarding (5 steps), home feed, book detail, settings
 - Apply vibe theme by setting `data-vibe` attribute on `<html>` via CSS custom properties — no JS overhead
 - Parse Goodreads CSV client-side using PapaParse; pass structured data to API route
@@ -272,47 +277,51 @@ At launch, the system is designed for ~1,000 concurrent users and 10,000 MAU wit
 - Display AI summary with usage counter badge for free users; render paywall modal on 429 response
 
 #### What It Does NOT Own
+
 - Rate limit enforcement (owned by NextjsApiRoutes)
 - Subscription status decisions (validated server-side on every AI request)
 - Direct external API calls to Gemini or Razorpay (all proxied via API routes)
 
 #### Data Owned
+
 - No persistent data. Reads from Supabase DB via API routes or supabase-js client.
 
 #### Dependencies
+
 - NextjsApiRoutes, SupabaseAuth, SupabaseDB (via supabase-js)
 
 #### SLA / SLO
 
-| Metric | Target |
-|---|---|
-| Availability | 99.5% (Vercel SLA) |
-| LCP (Home Feed) | < 2.5s on 4G |
+| Metric            | Target                         |
+| ----------------- | ------------------------------ |
+| Availability      | 99.5% (Vercel SLA)             |
+| LCP (Home Feed)   | < 2.5s on 4G                   |
 | Vibe Theme Switch | < 100ms (CSS-only, no network) |
 
 ---
 
 ### NextjsApiRoutes
 
-**Type**            : Service (Serverless Functions)
-**Responsibility**  : Owns all server-side business logic: AI rate limiting, Razorpay webhook verification, book search proxying, subscription status checks, and onboarding completion.
-**Owned By**        : Platform Engineering
+**Type** : Service (Serverless Functions)
+**Responsibility** : Owns all server-side business logic: AI rate limiting, Razorpay webhook verification, book search proxying, subscription status checks, and onboarding completion.
+**Owned By** : Platform Engineering
 **Language/Runtime**: TypeScript / Node.js 20 (Vercel Serverless)
-**Scales**          : Horizontally (Vercel auto-scales each route independently)
-**Stateful**        : No
+**Scales** : Horizontally (Vercel auto-scales each route independently)
+**Stateful** : No
 
 #### Interfaces
 
-| Interface | Protocol | Direction | Consumer / Producer |
-|---|---|---|---|
-| REST API | HTTPS | Inbound | NextjsFrontend / Razorpay (webhook) |
-| Supabase Admin Client | HTTPS (service role) | Outbound | SupabaseDB |
-| Gemini SDK | HTTPS | Outbound | Gemini API |
-| Razorpay SDK | HTTPS | Outbound | Razorpay |
-| Open Library API | HTTPS | Outbound | Open Library |
-| Resend API | HTTPS | Outbound | Resend |
+| Interface             | Protocol             | Direction | Consumer / Producer                 |
+| --------------------- | -------------------- | --------- | ----------------------------------- |
+| REST API              | HTTPS                | Inbound   | NextjsFrontend / Razorpay (webhook) |
+| Supabase Admin Client | HTTPS (service role) | Outbound  | SupabaseDB                          |
+| Gemini SDK            | HTTPS                | Outbound  | Gemini API                          |
+| Razorpay SDK          | HTTPS                | Outbound  | Razorpay                            |
+| Open Library API      | HTTPS                | Outbound  | Open Library                        |
+| Resend API            | HTTPS                | Outbound  | Resend                              |
 
 #### Key Responsibilities
+
 - `POST /api/v1/ai/summary` — Validate JWT, check `ai_usage` table, call Gemini if uncached, write to `ai_summaries`, increment usage counter
 - `GET /api/v1/books/search` — Proxy search to Open Library; normalise response to internal schema; upsert matched books into `books` table
 - `GET /api/v1/subscription/status` — Return current `subscription_status` and `subscription_expires_at` for authenticated user
@@ -321,239 +330,257 @@ At launch, the system is designed for ~1,000 concurrent users and 10,000 MAU wit
 - `POST /api/v1/import/goodreads` — Accept parsed CSV payload; batch-upsert shelf entries
 
 #### What It Does NOT Own
+
 - UI rendering (owned by NextjsFrontend)
 - Database schema migrations (owned by Supabase CLI / engineering)
 - Email template design (Resend handles rendering)
 
 #### Data Owned
+
 - No persistent data store. Reads/writes exclusively via SupabaseDB using service role key.
 
 #### Dependencies
+
 - SupabaseDB (service role), GeminiAPI, RazorpayGateway, OpenLibraryAPI, ResendEmail
 
 #### SLA / SLO
 
-| Metric | Target |
-|---|---|
-| Availability | 99.5% |
-| AI Summary p99 (cached) | < 1s |
-| AI Summary p99 (fresh) | < 8s |
-| Webhook Processing p99 | < 3s |
-| All other routes p99 | < 500ms |
+| Metric                  | Target  |
+| ----------------------- | ------- |
+| Availability            | 99.5%   |
+| AI Summary p99 (cached) | < 1s    |
+| AI Summary p99 (fresh)  | < 8s    |
+| Webhook Processing p99  | < 3s    |
+| All other routes p99    | < 500ms |
 
 ---
 
 ### SupabaseAuth
 
-**Type**            : Service (Managed — Supabase)
-**Responsibility**  : Issues and validates JWTs for all authenticated sessions; manages OAuth provider flows (Google); handles email/password auth with verification.
-**Owned By**        : Supabase (managed) / Platform Engineering (configuration)
+**Type** : Service (Managed — Supabase)
+**Responsibility** : Issues and validates JWTs for all authenticated sessions; manages OAuth provider flows (Google); handles email/password auth with verification.
+**Owned By** : Supabase (managed) / Platform Engineering (configuration)
 **Language/Runtime**: Managed (GoTrue under the hood)
-**Scales**          : Horizontally (managed by Supabase)
-**Stateful**        : Yes (session store internal to Supabase)
+**Scales** : Horizontally (managed by Supabase)
+**Stateful** : Yes (session store internal to Supabase)
 
 #### Interfaces
 
-| Interface | Protocol | Direction | Consumer / Producer |
-|---|---|---|---|
-| OAuth Redirect | HTTPS | Inbound | End User (via Google) |
-| JWT Issuance | HTTPS (REST) | Outbound | NextjsFrontend (supabase-js) |
-| JWT Verification | In-process (RLS) | Internal | SupabaseDB (via `auth.uid()`) |
+| Interface        | Protocol         | Direction | Consumer / Producer           |
+| ---------------- | ---------------- | --------- | ----------------------------- |
+| OAuth Redirect   | HTTPS            | Inbound   | End User (via Google)         |
+| JWT Issuance     | HTTPS (REST)     | Outbound  | NextjsFrontend (supabase-js)  |
+| JWT Verification | In-process (RLS) | Internal  | SupabaseDB (via `auth.uid()`) |
 
 #### Key Responsibilities
+
 - Handle Google OAuth 2.0 code exchange and session creation
 - Issue short-lived JWTs (access token) + refresh tokens for all sessions
 - Trigger `handle_new_user()` database function on new signup to create `profiles` row
 - Send email verification links for Email/Password signups via built-in Supabase email
 
 #### What It Does NOT Own
+
 - Subscription status (owned by `profiles` table)
 - Role management beyond `authenticated` / `service_role` (handled by RLS policies)
 
 #### Data Owned
+
 - `auth.users` table (internal to Supabase, not directly accessible)
 - `auth.identities` table (OAuth provider links)
 
 #### Dependencies
+
 - Google OAuth 2.0 (external), Supabase SMTP (for email verification)
 
 #### SLA / SLO
 
-| Metric | Target |
-|---|---|
-| Availability | 99.9% (Supabase Pro SLA) |
-| Token Issuance p99 | < 500ms |
+| Metric             | Target                   |
+| ------------------ | ------------------------ |
+| Availability       | 99.9% (Supabase Pro SLA) |
+| Token Issuance p99 | < 500ms                  |
 
 ---
 
 ### SupabaseDB
 
-**Type**            : Database (Managed Postgres 15)
-**Responsibility**  : Single source of truth for all persistent application data; enforces row-level security to guarantee per-user data isolation.
-**Owned By**        : Platform Engineering
+**Type** : Database (Managed Postgres 15)
+**Responsibility** : Single source of truth for all persistent application data; enforces row-level security to guarantee per-user data isolation.
+**Owned By** : Platform Engineering
 **Language/Runtime**: PostgreSQL 15 (Supabase managed)
-**Scales**          : Vertically (Supabase plan upgrade) + Read replicas (Supabase Pro+)
-**Stateful**        : Yes
+**Scales** : Vertically (Supabase plan upgrade) + Read replicas (Supabase Pro+)
+**Stateful** : Yes
 
 #### Interfaces
 
-| Interface | Protocol | Direction | Consumer / Producer |
-|---|---|---|---|
-| Postgres Wire Protocol | HTTPS (PostgREST) | Inbound | NextjsApiRoutes (service role), NextjsFrontend (anon/authed) |
-| Supabase JS Client | HTTPS | Inbound | NextjsFrontend |
+| Interface              | Protocol          | Direction | Consumer / Producer                                          |
+| ---------------------- | ----------------- | --------- | ------------------------------------------------------------ |
+| Postgres Wire Protocol | HTTPS (PostgREST) | Inbound   | NextjsApiRoutes (service role), NextjsFrontend (anon/authed) |
+| Supabase JS Client     | HTTPS             | Inbound   | NextjsFrontend                                               |
 
 #### Key Responsibilities
+
 - Persist all application tables: `profiles`, `books`, `shelf_entries`, `ai_summaries`, `ai_usage`, `vibes`, `subscriptions`
 - Enforce RLS policies — every table with user data has `auth.uid() = user_id` policies
 - Run `handle_new_user()` trigger on `auth.users` insert
 - Enforce `UNIQUE(user_id, book_id)` on `shelf_entries` to prevent duplicate shelf entries
 
 #### What It Does NOT Own
+
 - Auth token issuance (SupabaseAuth)
 - File storage (SupabaseStorage)
 - Business logic / rate limit calculations (NextjsApiRoutes)
 
 #### Data Owned
+
 - All tables listed in Section 6.1
 
 #### Dependencies
+
 - SupabaseAuth (for `auth.uid()` in RLS policies)
 
 #### SLA / SLO
 
-| Metric | Target |
-|---|---|
-| Availability | 99.9% (Supabase Pro SLA) |
-| Query p99 (simple RLS select) | < 100ms |
-| Write p99 | < 200ms |
+| Metric                        | Target                   |
+| ----------------------------- | ------------------------ |
+| Availability                  | 99.9% (Supabase Pro SLA) |
+| Query p99 (simple RLS select) | < 100ms                  |
+| Write p99                     | < 200ms                  |
 
 ---
 
 ### SupabaseStorage
 
-**Type**            : Object Storage (Managed)
-**Responsibility**  : Stores and serves user avatar images via private buckets with time-limited signed URLs.
-**Owned By**        : Platform Engineering
+**Type** : Object Storage (Managed)
+**Responsibility** : Stores and serves user avatar images via private buckets with time-limited signed URLs.
+**Owned By** : Platform Engineering
 **Language/Runtime**: Managed (S3-compatible — Supabase)
-**Scales**          : Horizontally (managed — unlimited)
-**Stateful**        : Yes
+**Scales** : Horizontally (managed — unlimited)
+**Stateful** : Yes
 
 #### Interfaces
 
-| Interface | Protocol | Direction | Consumer / Producer |
-|---|---|---|---|
-| Upload | HTTPS (supabase-js Storage API) | Inbound | NextjsFrontend |
-| Signed URL Fetch | HTTPS | Inbound | Browser (image display) |
+| Interface        | Protocol                        | Direction | Consumer / Producer     |
+| ---------------- | ------------------------------- | --------- | ----------------------- |
+| Upload           | HTTPS (supabase-js Storage API) | Inbound   | NextjsFrontend          |
+| Signed URL Fetch | HTTPS                           | Inbound   | Browser (image display) |
 
 #### Key Responsibilities
+
 - Store avatar images (max 2MB, JPEG/PNG/WebP) in a private bucket `avatars/`
 - Generate short-lived signed URLs for avatar display
 - Enforce bucket RLS: users may only write to their own `avatars/{user_id}/` path
 
 #### What It Does NOT Own
+
 - Book cover images (fetched directly from Open Library CDN URLs, stored as `cover_url` TEXT in `books`)
 
 #### Data Owned
+
 - `avatars/` private bucket
 
 #### SLA / SLO
 
-| Metric | Target |
-|---|---|
-| Upload p95 | < 2s (2MB file) |
-| Signed URL generation | < 100ms |
+| Metric                | Target          |
+| --------------------- | --------------- |
+| Upload p95            | < 2s (2MB file) |
+| Signed URL generation | < 100ms         |
 
 ---
 
 ### GeminiAPI
 
-**Type**            : External Service
-**Responsibility**  : Generates AI-powered literary analyses of books (themes, writing style, plot overview, audience fit) on demand from NextjsApiRoutes.
-**Owned By**        : Google (external)
+**Type** : External Service
+**Responsibility** : Generates AI-powered literary analyses of books (themes, writing style, plot overview, audience fit) on demand from NextjsApiRoutes.
+**Owned By** : Google (external)
 **Language/Runtime**: REST API (Google AI SDK)
-**Scales**          : Externally managed
-**Stateful**        : No
+**Scales** : Externally managed
+**Stateful** : No
 
 #### Interfaces
 
-| Interface | Protocol | Direction | Consumer / Producer |
-|---|---|---|---|
-| `/v1/models/generate` | HTTPS | Outbound | NextjsApiRoutes |
+| Interface             | Protocol | Direction | Consumer / Producer |
+| --------------------- | -------- | --------- | ------------------- |
+| `/v1/models/generate` | HTTPS    | Outbound  | NextjsApiRoutes     |
 
 #### Key Responsibilities
+
 - Accept structured literary analysis prompts and return markdown-formatted responses
 - Apply safety filters for adult/explicit content
 
 #### What It Does NOT Own
+
 - Caching of responses (owned by `ai_summaries` table in SupabaseDB)
 - Rate limit tracking (owned by `ai_usage` table)
 
 #### SLA / SLO
 
-| Metric | Target |
-|---|---|
-| Response Time p95 | < 6s (fresh request) |
-| Free Tier RPM | 15 RPM (Gemini Flash) |
+| Metric            | Target                |
+| ----------------- | --------------------- |
+| Response Time p95 | < 6s (fresh request)  |
+| Free Tier RPM     | 15 RPM (Gemini Flash) |
 
 ---
 
 ### RazorpayGateway
 
-**Type**            : External Service (Payment Gateway)
-**Responsibility**  : Processes Premium subscription payments (monthly ₹149 / annual ₹999) and delivers webhook events to Readmora to update subscription status.
-**Owned By**        : Razorpay (external)
+**Type** : External Service (Payment Gateway)
+**Responsibility** : Processes Premium subscription payments (monthly ₹149 / annual ₹999) and delivers webhook events to Readmora to update subscription status.
+**Owned By** : Razorpay (external)
 **Language/Runtime**: REST API + JavaScript SDK
-**Scales**          : Externally managed
-**Stateful**        : No (from Readmora perspective; state lives in `subscriptions` table)
+**Scales** : Externally managed
+**Stateful** : No (from Readmora perspective; state lives in `subscriptions` table)
 
 #### Interfaces
 
-| Interface | Protocol | Direction | Consumer / Producer |
-|---|---|---|---|
-| Checkout JS | HTTPS (browser SDK) | Outbound | NextjsFrontend |
-| Webhook | HTTPS (POST) | Inbound | `POST /api/v1/webhooks/razorpay` |
+| Interface   | Protocol            | Direction | Consumer / Producer              |
+| ----------- | ------------------- | --------- | -------------------------------- |
+| Checkout JS | HTTPS (browser SDK) | Outbound  | NextjsFrontend                   |
+| Webhook     | HTTPS (POST)        | Inbound   | `POST /api/v1/webhooks/razorpay` |
 
 #### Key Responsibilities
+
 - Present payment checkout modal in-browser
 - Process card / UPI / netbanking payments
 - Send HMAC-signed webhook events for: `payment.captured`, `payment.failed`, `subscription.cancelled`, `subscription.charged`
 
 #### What It Does NOT Own
+
 - Subscription status in Readmora DB (updated by NextjsApiRoutes on webhook receipt)
 
 ---
 
 ### OpenLibraryAPI
 
-**Type**            : External Service (Book Metadata)
-**Responsibility**  : Provides book metadata (title, author, ISBN, cover, description, genres) via public REST API, proxied by Readmora's search route.
-**Owned By**        : Internet Archive (external)
+**Type** : External Service (Book Metadata)
+**Responsibility** : Provides book metadata (title, author, ISBN, cover, description, genres) via public REST API, proxied by Readmora's search route.
+**Owned By** : Internet Archive (external)
 **Language/Runtime**: REST API (no auth required)
-**Scales**          : Externally managed
-**Stateful**        : No
+**Scales** : Externally managed
+**Stateful** : No
 
 #### Interfaces
 
-| Interface | Protocol | Direction | Consumer / Producer |
-|---|---|---|---|
-| Search API | HTTPS | Outbound | NextjsApiRoutes `/api/v1/books/search` |
+| Interface  | Protocol | Direction | Consumer / Producer                    |
+| ---------- | -------- | --------- | -------------------------------------- |
+| Search API | HTTPS    | Outbound  | NextjsApiRoutes `/api/v1/books/search` |
 
 ---
 
 ### ResendEmail
 
-**Type**            : External Service (Transactional Email)
-**Responsibility**  : Delivers transactional emails: payment confirmation, subscription expiry reminders, and payment failure notifications.
-**Owned By**        : Resend (external)
+**Type** : External Service (Transactional Email)
+**Responsibility** : Delivers transactional emails: payment confirmation, subscription expiry reminders, and payment failure notifications.
+**Owned By** : Resend (external)
 **Language/Runtime**: REST API
-**Scales**          : Externally managed
-**Stateful**        : No
+**Scales** : Externally managed
+**Stateful** : No
 
 #### Interfaces
 
-| Interface | Protocol | Direction | Consumer / Producer |
-|---|---|---|---|
-| Send Email | HTTPS | Outbound | NextjsApiRoutes (webhook handler, cron) |
+| Interface  | Protocol | Direction | Consumer / Producer                     |
+| ---------- | -------- | --------- | --------------------------------------- |
+| Send Email | HTTPS    | Outbound  | NextjsApiRoutes (webhook handler, cron) |
 
 ---
 
@@ -561,11 +588,11 @@ At launch, the system is designed for ~1,000 concurrent users and 10,000 MAU wit
 
 ### 6.1 Data Store Summary
 
-| Store | Technology | Use Case | Scaling Strategy |
-|---|---|---|---|
-| Primary DB | Supabase Postgres 15 | All application data — profiles, shelves, AI cache, subscriptions | Vertical (plan upgrade); read replicas on Supabase Pro |
-| Object Storage | Supabase Storage | User avatar images | Native (managed, unlimited) |
-| Analytics | PostHog (cloud) | User behaviour events, funnel analysis | Managed — PostHog cloud |
+| Store          | Technology           | Use Case                                                          | Scaling Strategy                                       |
+| -------------- | -------------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
+| Primary DB     | Supabase Postgres 15 | All application data — profiles, shelves, AI cache, subscriptions | Vertical (plan upgrade); read replicas on Supabase Pro |
+| Object Storage | Supabase Storage     | User avatar images                                                | Native (managed, unlimited)                            |
+| Analytics      | PostHog (cloud)      | User behaviour events, funnel analysis                            | Managed — PostHog cloud                                |
 
 > 📌 Assumption: No Redis cache is used in v1. Supabase Postgres provides sufficient query speed at this scale. AI summaries are cached in the `ai_summaries` table (Postgres), which serves as the application-layer cache for Gemini responses. Redis is a Phase 2 consideration.
 
@@ -574,6 +601,7 @@ At launch, the system is designed for ~1,000 concurrent users and 10,000 MAU wit
 ### 6.2 Schema Overview
 
 #### `profiles`
+
 ```sql
 CREATE TABLE profiles (
   id                     UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -593,6 +621,7 @@ CREATE TABLE profiles (
 ```
 
 #### `books`
+
 ```sql
 CREATE TABLE books (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -612,6 +641,7 @@ CREATE TABLE books (
 ```
 
 #### `shelf_entries`
+
 ```sql
 CREATE TABLE shelf_entries (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -630,6 +660,7 @@ CREATE TABLE shelf_entries (
 ```
 
 #### `ai_summaries` (Global Cache)
+
 ```sql
 CREATE TABLE ai_summaries (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -642,6 +673,7 @@ CREATE TABLE ai_summaries (
 ```
 
 #### `ai_usage` (Per-User Rate Limiting)
+
 ```sql
 CREATE TABLE ai_usage (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -654,6 +686,7 @@ CREATE TABLE ai_usage (
 ```
 
 #### `subscriptions` (Audit Log)
+
 ```sql
 CREATE TABLE subscriptions (
   id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -668,6 +701,7 @@ CREATE TABLE subscriptions (
 ```
 
 #### `vibes` (Seed / Lookup)
+
 ```sql
 CREATE TABLE vibes (
   id              TEXT PRIMARY KEY,   -- e.g. 'wildflower'
@@ -691,14 +725,14 @@ CREATE TABLE vibes (
 
 **Indexing Strategy:**
 
-| Table | Index | Query Pattern |
-|---|---|---|
-| `shelf_entries` | `(user_id, shelf)` | "Get all books on user's 'finished' shelf" |
-| `shelf_entries` | `(user_id, book_id)` | UNIQUE — prevents duplicates, also serves lookup |
-| `ai_usage` | `(user_id, week_start)` | UNIQUE — primary rate limit lookup |
-| `ai_summaries` | `(book_id)` | UNIQUE — cache hit check |
-| `profiles` | `(username)` | UNIQUE — real-time uniqueness check during onboarding |
-| `books` | `(isbn)` | UNIQUE — Goodreads import ISBN dedup |
+| Table           | Index                   | Query Pattern                                         |
+| --------------- | ----------------------- | ----------------------------------------------------- |
+| `shelf_entries` | `(user_id, shelf)`      | "Get all books on user's 'finished' shelf"            |
+| `shelf_entries` | `(user_id, book_id)`    | UNIQUE — prevents duplicates, also serves lookup      |
+| `ai_usage`      | `(user_id, week_start)` | UNIQUE — primary rate limit lookup                    |
+| `ai_summaries`  | `(book_id)`             | UNIQUE — cache hit check                              |
+| `profiles`      | `(username)`            | UNIQUE — real-time uniqueness check during onboarding |
+| `books`         | `(isbn)`                | UNIQUE — Goodreads import ISBN dedup                  |
 
 **Normalisation:** 3NF for all OLTP tables. No denormalisation in v1 — query patterns are simple enough that joins are inexpensive.
 
@@ -757,30 +791,31 @@ POST /api/v1/ai/summary  { book_id }
 
 ### 6.5 Data Retention & Lifecycle
 
-| Data Type | Retention Period | Deletion Strategy |
-|---|---|---|
-| User profile + shelf data | Until account deletion | Cascade delete via `auth.users` row removal |
-| AI summaries | Indefinite (global cache) | Never deleted — not user-specific |
-| AI usage records | Cascade on account deletion | Cascade via `user_id` FK |
-| Payment records (`subscriptions`) | 7 years | Manual archival; excluded from cascade |
-| Avatar images | Until account deletion | Storage bucket cleanup on account deletion |
-| Analytics events (PostHog) | 2 years | PostHog retention policy |
+| Data Type                         | Retention Period            | Deletion Strategy                           |
+| --------------------------------- | --------------------------- | ------------------------------------------- |
+| User profile + shelf data         | Until account deletion      | Cascade delete via `auth.users` row removal |
+| AI summaries                      | Indefinite (global cache)   | Never deleted — not user-specific           |
+| AI usage records                  | Cascade on account deletion | Cascade via `user_id` FK                    |
+| Payment records (`subscriptions`) | 7 years                     | Manual archival; excluded from cascade      |
+| Avatar images                     | Until account deletion      | Storage bucket cleanup on account deletion  |
+| Analytics events (PostHog)        | 2 years                     | PostHog retention policy                    |
 
 ### 6.6 Data Privacy Classification
 
-| Table | Classification | Notes |
-|---|---|---|
-| `profiles` | PII | Username, avatar URL, email (in auth.users) |
-| `shelf_entries` | Personal | Reading history |
-| `ai_usage` | Personal | Behavioural |
-| `subscriptions` | Financial / PII-adjacent | Razorpay IDs; retain 7 years |
-| `books`, `vibes`, `ai_summaries` | Public | No user data |
+| Table                            | Classification           | Notes                                       |
+| -------------------------------- | ------------------------ | ------------------------------------------- |
+| `profiles`                       | PII                      | Username, avatar URL, email (in auth.users) |
+| `shelf_entries`                  | Personal                 | Reading history                             |
+| `ai_usage`                       | Personal                 | Behavioural                                 |
+| `subscriptions`                  | Financial / PII-adjacent | Razorpay IDs; retain 7 years                |
+| `books`, `vibes`, `ai_summaries` | Public                   | No user data                                |
 
 ---
 
 ## 6.7 Book Metadata & Cover Image Architecture
 
 ### Overview
+
 Readmora uses Open Library as the primary external source for book metadata and cover images. Data is cached in Supabase Postgres to minimise repeated API calls and improve performance.
 
 ---
@@ -788,6 +823,7 @@ Readmora uses Open Library as the primary external source for book metadata and 
 ### External APIs
 
 #### 1. Open Library Search API
+
 - Endpoint:
   https://openlibrary.org/search.json?q={query}
 
@@ -798,6 +834,7 @@ Readmora uses Open Library as the primary external source for book metadata and 
 ---
 
 #### 2. Open Library Covers API
+
 - Endpoint:
   https://covers.openlibrary.org/
 
@@ -843,27 +880,28 @@ books (
 
 ### Internal API Routes
 
-| Route | Method | Auth Required | Purpose |
-|---|---|---|---|
-| `/api/v1/ai/summary` | POST | ✅ JWT | Get AI book summary (rate-limited; Gemini-backed) |
-| `/api/v1/books/search` | GET | Optional | Proxy search to Open Library |
-| `/api/v1/subscription/status` | GET | ✅ JWT | Return subscription status + expiry |
-| `/api/v1/webhooks/razorpay` | POST | HMAC signature | Handle Razorpay payment events |
-| `/api/v1/onboarding/complete` | POST | ✅ JWT | Set `onboarding_complete = true` |
-| `/api/v1/import/goodreads` | POST | ✅ JWT | Batch-upsert shelf entries from parsed CSV |
+| Route                         | Method | Auth Required  | Purpose                                           |
+| ----------------------------- | ------ | -------------- | ------------------------------------------------- |
+| `/api/v1/ai/summary`          | POST   | ✅ JWT         | Get AI book summary (rate-limited; Gemini-backed) |
+| `/api/v1/books/search`        | GET    | Optional       | Proxy search to Open Library                      |
+| `/api/v1/subscription/status` | GET    | ✅ JWT         | Return subscription status + expiry               |
+| `/api/v1/webhooks/razorpay`   | POST   | HMAC signature | Handle Razorpay payment events                    |
+| `/api/v1/onboarding/complete` | POST   | ✅ JWT         | Set `onboarding_complete = true`                  |
+| `/api/v1/import/goodreads`    | POST   | ✅ JWT         | Batch-upsert shelf entries from parsed CSV        |
 
 ### Communication Patterns
 
-| Type | Protocol | Use Case |
-|---|---|---|
-| Synchronous (client→server) | HTTPS REST | All page data, shelf mutations, search |
-| Synchronous (server→external) | HTTPS REST | Gemini, Razorpay, Open Library, Resend |
-| Webhook (inbound) | HTTPS POST + HMAC | Razorpay payment events |
-| Real-time (optional, future) | Supabase Realtime (WebSocket) | Subscription status push (v2) |
+| Type                          | Protocol                      | Use Case                               |
+| ----------------------------- | ----------------------------- | -------------------------------------- |
+| Synchronous (client→server)   | HTTPS REST                    | All page data, shelf mutations, search |
+| Synchronous (server→external) | HTTPS REST                    | Gemini, Razorpay, Open Library, Resend |
+| Webhook (inbound)             | HTTPS POST + HMAC             | Razorpay payment events                |
+| Real-time (optional, future)  | Supabase Realtime (WebSocket) | Subscription status push (v2)          |
 
 ### API Gateway Responsibilities
 
 Vercel Edge Middleware handles:
+
 - **Auth guard:** Redirect unauthenticated requests to `/login` for protected routes
 - **Rate limiting:** Vercel's built-in edge rate limiting applied to `/api/v1/ai/summary` (secondary defence; primary is server-side DB check)
 - **HTTPS enforcement:** Vercel enforces TLS 1.3; no HTTP served
@@ -878,14 +916,14 @@ Vercel Edge Middleware handles:
 
 ### Authentication Flows Supported
 
-| Flow | Supported | Notes |
-|---|---|---|
-| Email + Password | ✅ Yes | Bcrypt-hashed via Supabase; email verification required before app access |
-| OAuth 2.0 (Google) | ✅ Yes | PKCE flow via Supabase Auth; profile auto-created on first sign-in |
-| Magic Link | ❌ No | Not in v1 — adds email flow complexity |
-| MFA (TOTP) | ❌ No | Not in v1 — target audience doesn't demand it; v2 consideration |
-| API Key (M2M) | ❌ No | No third-party integrations requiring M2M in v1 |
-| SAML 2.0 | ❌ No | No enterprise customers in v1 |
+| Flow               | Supported | Notes                                                                     |
+| ------------------ | --------- | ------------------------------------------------------------------------- |
+| Email + Password   | ✅ Yes    | Bcrypt-hashed via Supabase; email verification required before app access |
+| OAuth 2.0 (Google) | ✅ Yes    | PKCE flow via Supabase Auth; profile auto-created on first sign-in        |
+| Magic Link         | ❌ No     | Not in v1 — adds email flow complexity                                    |
+| MFA (TOTP)         | ❌ No     | Not in v1 — target audience doesn't demand it; v2 consideration           |
+| API Key (M2M)      | ❌ No     | No third-party integrations requiring M2M in v1                           |
+| SAML 2.0           | ❌ No     | No enterprise customers in v1                                             |
 
 ### Token Architecture
 
@@ -910,21 +948,22 @@ Supabase Auth issues:
 ### Authorization Model: RBAC via Supabase RLS
 
 Roles:
+
 - `anon` — unauthenticated users; can read `books`, `vibes` only
 - `authenticated` — signed-in users; can CRUD their own rows (enforced by `auth.uid() = user_id` RLS)
 - `service_role` — server-side only (API routes); bypasses RLS for privileged operations (rate limit write, subscription update)
 
 **Permission Matrix:**
 
-| Table | anon | authenticated (own rows) | service_role |
-|---|---|---|---|
-| `profiles` | ❌ | SELECT, UPDATE | ALL |
-| `books` | SELECT | SELECT | ALL |
-| `shelf_entries` | ❌ | ALL (own) | ALL |
-| `ai_summaries` | SELECT | SELECT | ALL |
-| `ai_usage` | ❌ | SELECT (own) | ALL |
-| `subscriptions` | ❌ | SELECT (own) | ALL |
-| `vibes` | SELECT | SELECT | ALL |
+| Table           | anon   | authenticated (own rows) | service_role |
+| --------------- | ------ | ------------------------ | ------------ |
+| `profiles`      | ❌     | SELECT, UPDATE           | ALL          |
+| `books`         | SELECT | SELECT                   | ALL          |
+| `shelf_entries` | ❌     | ALL (own)                | ALL          |
+| `ai_summaries`  | SELECT | SELECT                   | ALL          |
+| `ai_usage`      | ❌     | SELECT (own)             | ALL          |
+| `subscriptions` | ❌     | SELECT (own)             | ALL          |
+| `vibes`         | SELECT | SELECT                   | ALL          |
 
 ---
 
@@ -932,24 +971,24 @@ Roles:
 
 ### 9.1 Cloud Provider & Region Strategy
 
-| Provider | Primary Region | DR Strategy | Justification |
-|---|---|---|---|
-| Vercel (hosting) | Global Edge (auto) | Multi-region by default | Next.js-native; zero-ops; global CDN included |
-| Supabase (data) | ap-south-1 (Mumbai) | Supabase Pro: daily backups + PITR | India-first user base; low latency to target market |
+| Provider         | Primary Region      | DR Strategy                        | Justification                                       |
+| ---------------- | ------------------- | ---------------------------------- | --------------------------------------------------- |
+| Vercel (hosting) | Global Edge (auto)  | Multi-region by default            | Next.js-native; zero-ops; global CDN included       |
+| Supabase (data)  | ap-south-1 (Mumbai) | Supabase Pro: daily backups + PITR | India-first user base; low latency to target market |
 
 > 📌 Assumption: Supabase project is provisioned in `ap-south-1` (AWS Mumbai) to minimise latency for the primary India-based user base.
 
 ### 9.2 Infrastructure Components
 
-| Component | Service | Configuration |
-|---|---|---|
-| Compute | Vercel Serverless Functions | Auto-scaled; Node.js 20 runtime; 10s timeout (AI route: 30s) |
-| CDN / Edge | Vercel Edge Network | Static assets, ISR pages served at edge globally |
-| DNS | Vercel DNS | `readmora.app` → Vercel managed domain |
-| TLS | Vercel (auto-provisioned) | TLS 1.3; auto-renewal via Let's Encrypt |
-| Database | Supabase (Postgres 15) | Free → Pro at ~3,000 MAU (~$25/month); connection pooling via Supabase Pooler (PgBouncer) |
-| Storage | Supabase Storage | Private `avatars` bucket; 1GB free tier |
-| Secrets | Vercel Environment Variables | Server-only vars (`GEMINI_API_KEY`, `RAZORPAY_KEY_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`) never exposed to browser |
+| Component  | Service                      | Configuration                                                                                                    |
+| ---------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Compute    | Vercel Serverless Functions  | Auto-scaled; Node.js 20 runtime; 10s timeout (AI route: 30s)                                                     |
+| CDN / Edge | Vercel Edge Network          | Static assets, ISR pages served at edge globally                                                                 |
+| DNS        | Vercel DNS                   | `readmora.app` → Vercel managed domain                                                                           |
+| TLS        | Vercel (auto-provisioned)    | TLS 1.3; auto-renewal via Let's Encrypt                                                                          |
+| Database   | Supabase (Postgres 15)       | Free → Pro at ~3,000 MAU (~$25/month); connection pooling via Supabase Pooler (PgBouncer)                        |
+| Storage    | Supabase Storage             | Private `avatars` bucket; 1GB free tier                                                                          |
+| Secrets    | Vercel Environment Variables | Server-only vars (`GEMINI_API_KEY`, `RAZORPAY_KEY_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`) never exposed to browser |
 
 ### 9.3 Deployment Pipeline
 
@@ -978,11 +1017,11 @@ Roles:
 
 ### 9.4 Deployment Strategy
 
-| Environment | Strategy | Rollback Time | Notes |
-|---|---|---|---|
-| Production | Atomic deploy (Vercel) | < 1 minute | Vercel keeps previous deployment live; instant rollback via dashboard |
-| Preview | Per-PR preview URL | N/A | Isolated Vercel preview environment per PR |
-| Development | Local (`next dev`) | N/A | `.env.local` with Supabase dev project |
+| Environment | Strategy               | Rollback Time | Notes                                                                 |
+| ----------- | ---------------------- | ------------- | --------------------------------------------------------------------- |
+| Production  | Atomic deploy (Vercel) | < 1 minute    | Vercel keeps previous deployment live; instant rollback via dashboard |
+| Preview     | Per-PR preview URL     | N/A           | Isolated Vercel preview environment per PR                            |
+| Development | Local (`next dev`)     | N/A           | `.env.local` with Supabase dev project                                |
 
 ### 9.5 Environment Variables
 
@@ -1019,45 +1058,45 @@ NEXT_PUBLIC_POSTHOG_HOST=           # Safe to expose
 
 ### 10.1 Scaling Strategy
 
-| Component | Scaling Type | Trigger | Notes |
-|---|---|---|---|
-| Next.js Frontend + API Routes | Horizontal (automatic) | Per-request (Vercel serverless) | Each function invocation is independent |
-| SupabaseDB | Vertical (plan upgrade) + Read replicas | Storage > 80% or connection count | Upgrade free → Pro at ~3,000 MAU |
-| SupabaseStorage | Horizontal (managed) | Automatic | No action needed |
-| GeminiAPI | External | Upgrade to paid tier at >15 RPM sustained | Monitor via Gemini console |
+| Component                     | Scaling Type                            | Trigger                                   | Notes                                   |
+| ----------------------------- | --------------------------------------- | ----------------------------------------- | --------------------------------------- |
+| Next.js Frontend + API Routes | Horizontal (automatic)                  | Per-request (Vercel serverless)           | Each function invocation is independent |
+| SupabaseDB                    | Vertical (plan upgrade) + Read replicas | Storage > 80% or connection count         | Upgrade free → Pro at ~3,000 MAU        |
+| SupabaseStorage               | Horizontal (managed)                    | Automatic                                 | No action needed                        |
+| GeminiAPI                     | External                                | Upgrade to paid tier at >15 RPM sustained | Monitor via Gemini console              |
 
 ### 10.2 Caching Strategy
 
-| Cache Layer | Technology | TTL | Invalidation | What's Cached |
-|---|---|---|---|---|
-| AI Summary | Postgres `ai_summaries` | Indefinite | Never (immutable per book) | Gemini response per `book_id` |
-| Book Metadata | Postgres `books` table | Indefinite | On Open Library data change (manual) | Title, author, cover, ISBN |
-| Static Assets | Vercel CDN | 1 year (immutable hash) | Content hash change | JS bundles, images, fonts |
-| ISR Pages | Vercel Edge | 60s revalidation | `revalidatePath()` on shelf mutation | Home feed, book detail pages |
-| Session | Supabase Auth (HttpOnly cookie) | 1 hour JWT / 7-day refresh | Sign-out | User session |
+| Cache Layer   | Technology                      | TTL                        | Invalidation                         | What's Cached                 |
+| ------------- | ------------------------------- | -------------------------- | ------------------------------------ | ----------------------------- |
+| AI Summary    | Postgres `ai_summaries`         | Indefinite                 | Never (immutable per book)           | Gemini response per `book_id` |
+| Book Metadata | Postgres `books` table          | Indefinite                 | On Open Library data change (manual) | Title, author, cover, ISBN    |
+| Static Assets | Vercel CDN                      | 1 year (immutable hash)    | Content hash change                  | JS bundles, images, fonts     |
+| ISR Pages     | Vercel Edge                     | 60s revalidation           | `revalidatePath()` on shelf mutation | Home feed, book detail pages  |
+| Session       | Supabase Auth (HttpOnly cookie) | 1 hour JWT / 7-day refresh | Sign-out                             | User session                  |
 
 ### 10.3 Performance Targets
 
-| Operation | p50 | p95 | p99 |
-|---|---|---|---|
-| Home feed load (LCP) | < 1s | < 2s | < 2.5s |
-| Shelf add / update | < 200ms | < 400ms | < 500ms |
-| Book search | < 300ms | < 700ms | < 1s |
-| AI summary (cached) | < 200ms | < 600ms | < 1s |
-| AI summary (fresh / Gemini) | < 4s | < 7s | < 8s |
-| Vibe theme switch | < 16ms | < 50ms | < 100ms |
-| Goodreads import (1,000 rows) | < 10s | < 20s | < 30s |
+| Operation                     | p50     | p95     | p99     |
+| ----------------------------- | ------- | ------- | ------- |
+| Home feed load (LCP)          | < 1s    | < 2s    | < 2.5s  |
+| Shelf add / update            | < 200ms | < 400ms | < 500ms |
+| Book search                   | < 300ms | < 700ms | < 1s    |
+| AI summary (cached)           | < 200ms | < 600ms | < 1s    |
+| AI summary (fresh / Gemini)   | < 4s    | < 7s    | < 8s    |
+| Vibe theme switch             | < 16ms  | < 50ms  | < 100ms |
+| Goodreads import (1,000 rows) | < 10s   | < 20s   | < 30s   |
 
 ### 10.4 Bottleneck Analysis
 
-| Potential Bottleneck | Risk | Mitigation |
-|---|---|---|
-| Gemini API free tier (15 RPM) | High | Global `ai_summaries` cache means Gemini is called once per book ever; at 10,000 MAU × 3/week = 30k requests/week but hit-rate will be very high for popular books |
-| Supabase free tier DB size (500MB) | Medium | Monitor via Supabase dashboard; upgrade to Pro ($25/mo) at 300MB |
-| Supabase connection pool (free tier: 15 direct connections) | High | Use Supabase's built-in Supavisor (connection pooler) for serverless routes; always use pooled connection string in API routes |
-| Open Library API latency | Medium | Cache book metadata in Postgres `books` table on first search; subsequent searches hit DB, not Open Library |
-| Large Goodreads CSV (2,000 rows) | Medium | Parsed client-side (PapaParse); server receives structured JSON, not raw CSV; batch upsert in single DB transaction |
-| Vercel function cold starts | Low | Vercel functions warm quickly (< 200ms); not a user-facing issue at this scale |
+| Potential Bottleneck                                        | Risk   | Mitigation                                                                                                                                                         |
+| ----------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Gemini API free tier (15 RPM)                               | High   | Global `ai_summaries` cache means Gemini is called once per book ever; at 10,000 MAU × 3/week = 30k requests/week but hit-rate will be very high for popular books |
+| Supabase free tier DB size (500MB)                          | Medium | Monitor via Supabase dashboard; upgrade to Pro ($25/mo) at 300MB                                                                                                   |
+| Supabase connection pool (free tier: 15 direct connections) | High   | Use Supabase's built-in Supavisor (connection pooler) for serverless routes; always use pooled connection string in API routes                                     |
+| Open Library API latency                                    | Medium | Cache book metadata in Postgres `books` table on first search; subsequent searches hit DB, not Open Library                                                        |
+| Large Goodreads CSV (2,000 rows)                            | Medium | Parsed client-side (PapaParse); server receives structured JSON, not raw CSV; batch upsert in single DB transaction                                                |
+| Vercel function cold starts                                 | Low    | Vercel functions warm quickly (< 200ms); not a user-facing issue at this scale                                                                                     |
 
 ---
 
@@ -1065,46 +1104,46 @@ NEXT_PUBLIC_POSTHOG_HOST=           # Safe to expose
 
 ### 11.1 Availability Targets
 
-| Tier | SLA | Architecture |
-|---|---|---|
-| Core Web App | 99.5% | Vercel + Supabase combined SLA |
-| AI Summary Feature | 99.0% | Gemini dependency; graceful fallback shown |
-| Payment Webhooks | 99.5% | Razorpay retries webhooks for 24h; idempotent handler |
+| Tier               | SLA   | Architecture                                          |
+| ------------------ | ----- | ----------------------------------------------------- |
+| Core Web App       | 99.5% | Vercel + Supabase combined SLA                        |
+| AI Summary Feature | 99.0% | Gemini dependency; graceful fallback shown            |
+| Payment Webhooks   | 99.5% | Razorpay retries webhooks for 24h; idempotent handler |
 
 ### 11.2 Failure Modes & Mitigations
 
-| Failure Mode | Probability | Impact | Mitigation |
-|---|---|---|---|
-| Gemini API timeout or error | Medium | Medium | Show "Summary temporarily unavailable" toast; do NOT decrement usage counter; retry not automatic (user re-triggers) |
-| Razorpay webhook delayed | Low | High | Poll `/api/v1/subscription/status` every 5s for 60s post-payment; Razorpay retries webhooks for 24 hours |
-| Razorpay webhook duplicate | Low | Medium | Idempotency: check `razorpay_payment_id` uniqueness in `subscriptions` before processing |
-| Supabase DB unavailable | Low | Critical | Vercel functions return 503; user sees error state; Supabase Pro has 99.9% SLA |
-| Supabase Auth down | Low | Critical | App unusable for new sign-ins; existing JWT sessions continue working until expiry |
-| Bad Vercel deployment | Medium | High | Instant rollback via Vercel dashboard (< 1 minute); previous deployment stays routed until new one passes health check |
-| Gemini cost spike | Medium | Financial | `ai_summary_enabled` feature flag in `feature_flags` table; can disable in < 1 minute |
-| Open Library API down | Medium | Low | Book search degrades gracefully: show "Search temporarily unavailable"; existing shelf data unaffected |
-| Goodreads CSV format change | Low | Low | Client-side parser; format version detection; feature flag `goodreads_import_enabled` |
+| Failure Mode                | Probability | Impact    | Mitigation                                                                                                             |
+| --------------------------- | ----------- | --------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Gemini API timeout or error | Medium      | Medium    | Show "Summary temporarily unavailable" toast; do NOT decrement usage counter; retry not automatic (user re-triggers)   |
+| Razorpay webhook delayed    | Low         | High      | Poll `/api/v1/subscription/status` every 5s for 60s post-payment; Razorpay retries webhooks for 24 hours               |
+| Razorpay webhook duplicate  | Low         | Medium    | Idempotency: check `razorpay_payment_id` uniqueness in `subscriptions` before processing                               |
+| Supabase DB unavailable     | Low         | Critical  | Vercel functions return 503; user sees error state; Supabase Pro has 99.9% SLA                                         |
+| Supabase Auth down          | Low         | Critical  | App unusable for new sign-ins; existing JWT sessions continue working until expiry                                     |
+| Bad Vercel deployment       | Medium      | High      | Instant rollback via Vercel dashboard (< 1 minute); previous deployment stays routed until new one passes health check |
+| Gemini cost spike           | Medium      | Financial | `ai_summary_enabled` feature flag in `feature_flags` table; can disable in < 1 minute                                  |
+| Open Library API down       | Medium      | Low       | Book search degrades gracefully: show "Search temporarily unavailable"; existing shelf data unaffected                 |
+| Goodreads CSV format change | Low         | Low       | Client-side parser; format version detection; feature flag `goodreads_import_enabled`                                  |
 
 ### 11.3 Resilience Patterns Applied
 
-| Pattern | Applied To | Implementation |
-|---|---|---|
-| Idempotency | Razorpay webhook handler | Check `razorpay_payment_id` in `subscriptions` before update |
-| Graceful Degradation | Gemini AI feature | Show fallback message; preserve usage counter |
-| Feature Flags | Gemini, Goodreads import, Payments | `feature_flags` table in Supabase; checked at API route entry |
-| Retry (client-side polling) | Post-payment status update | Frontend polls `/api/v1/subscription/status` every 5s × 12 (60s max) |
-| Timeout | Gemini API call | 10s hard timeout in API route; error returned if exceeded |
-| Atomic Deployment | All deployments | Vercel atomic deploys — old version serves traffic until new is healthy |
+| Pattern                     | Applied To                         | Implementation                                                          |
+| --------------------------- | ---------------------------------- | ----------------------------------------------------------------------- |
+| Idempotency                 | Razorpay webhook handler           | Check `razorpay_payment_id` in `subscriptions` before update            |
+| Graceful Degradation        | Gemini AI feature                  | Show fallback message; preserve usage counter                           |
+| Feature Flags               | Gemini, Goodreads import, Payments | `feature_flags` table in Supabase; checked at API route entry           |
+| Retry (client-side polling) | Post-payment status update         | Frontend polls `/api/v1/subscription/status` every 5s × 12 (60s max)    |
+| Timeout                     | Gemini API call                    | 10s hard timeout in API route; error returned if exceeded               |
+| Atomic Deployment           | All deployments                    | Vercel atomic deploys — old version serves traffic until new is healthy |
 
 ### 11.4 Disaster Recovery
 
-| Scenario | RPO | RTO | Recovery Procedure |
-|---|---|---|---|
-| Vercel deployment failure | 0 (no data loss) | < 1 minute | Instant rollback to previous Vercel deployment |
-| Supabase DB corruption | < 24 hours (free tier daily backup) | < 2 hours | Restore from Supabase daily backup; PITR available on Pro |
-| Accidental data deletion | < 24 hours | < 2 hours | Restore from Supabase backup; RLS prevents mass deletions |
-| Gemini API key compromise | 0 | < 15 minutes | Rotate `GEMINI_API_KEY` in Vercel env vars; redeploy |
-| Razorpay webhook secret compromise | 0 | < 15 minutes | Rotate `RAZORPAY_WEBHOOK_SECRET` in Razorpay dashboard + Vercel env vars |
+| Scenario                           | RPO                                 | RTO          | Recovery Procedure                                                       |
+| ---------------------------------- | ----------------------------------- | ------------ | ------------------------------------------------------------------------ |
+| Vercel deployment failure          | 0 (no data loss)                    | < 1 minute   | Instant rollback to previous Vercel deployment                           |
+| Supabase DB corruption             | < 24 hours (free tier daily backup) | < 2 hours    | Restore from Supabase daily backup; PITR available on Pro                |
+| Accidental data deletion           | < 24 hours                          | < 2 hours    | Restore from Supabase backup; RLS prevents mass deletions                |
+| Gemini API key compromise          | 0                                   | < 15 minutes | Rotate `GEMINI_API_KEY` in Vercel env vars; redeploy                     |
+| Razorpay webhook secret compromise | 0                                   | < 15 minutes | Rotate `RAZORPAY_WEBHOOK_SECRET` in Razorpay dashboard + Vercel env vars |
 
 ---
 
@@ -1133,42 +1172,42 @@ NEXT_PUBLIC_POSTHOG_HOST=           # Safe to expose
 
 ### 12.2 Security Controls
 
-| Domain | Control | Implementation |
-|---|---|---|
-| Transport | TLS 1.3 enforced | Vercel enforces HTTPS; HSTS header set; no HTTP served |
-| Authentication | JWT + Supabase Auth | 1-hour access tokens; 7-day refresh tokens; HttpOnly cookies |
-| Authorization | RLS (row-level RBAC) | Every user-owned table has `auth.uid() = user_id` RLS policy |
-| Webhook Auth | HMAC-SHA256 | `x-razorpay-signature` verified against `RAZORPAY_WEBHOOK_SECRET` before processing |
-| Input Validation | Zod schemas | All API route inputs validated at entry; reject malformed requests |
-| Secret Management | Vercel Env Vars (server-only) | `GEMINI_API_KEY`, `RAZORPAY_KEY_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` never in browser bundle |
-| File Upload | Type + size validation | Avatar: max 2MB, JPEG/PNG/WebP only; validated in API route before Storage write |
-| CSV Injection | PapaParse client-side | CSV parsed to JSON in browser; server never executes CSV content |
-| API Key Exposure | `NEXT_PUBLIC_` convention | Only `NEXT_PUBLIC_*` vars are in browser bundle; all secrets use bare var names |
-| Data Encryption | AES-256 at rest | Supabase default; Vercel Storage encrypted at rest |
-| PII in Logs | Structured logging only | Never log email, avatar URLs, reading history, or payment IDs in plain text |
-| Dependency Scanning | Dependabot | Automated PRs for CVE patches; reviewed weekly |
+| Domain              | Control                       | Implementation                                                                               |
+| ------------------- | ----------------------------- | -------------------------------------------------------------------------------------------- |
+| Transport           | TLS 1.3 enforced              | Vercel enforces HTTPS; HSTS header set; no HTTP served                                       |
+| Authentication      | JWT + Supabase Auth           | 1-hour access tokens; 7-day refresh tokens; HttpOnly cookies                                 |
+| Authorization       | RLS (row-level RBAC)          | Every user-owned table has `auth.uid() = user_id` RLS policy                                 |
+| Webhook Auth        | HMAC-SHA256                   | `x-razorpay-signature` verified against `RAZORPAY_WEBHOOK_SECRET` before processing          |
+| Input Validation    | Zod schemas                   | All API route inputs validated at entry; reject malformed requests                           |
+| Secret Management   | Vercel Env Vars (server-only) | `GEMINI_API_KEY`, `RAZORPAY_KEY_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` never in browser bundle |
+| File Upload         | Type + size validation        | Avatar: max 2MB, JPEG/PNG/WebP only; validated in API route before Storage write             |
+| CSV Injection       | PapaParse client-side         | CSV parsed to JSON in browser; server never executes CSV content                             |
+| API Key Exposure    | `NEXT_PUBLIC_` convention     | Only `NEXT_PUBLIC_*` vars are in browser bundle; all secrets use bare var names              |
+| Data Encryption     | AES-256 at rest               | Supabase default; Vercel Storage encrypted at rest                                           |
+| PII in Logs         | Structured logging only       | Never log email, avatar URLs, reading history, or payment IDs in plain text                  |
+| Dependency Scanning | Dependabot                    | Automated PRs for CVE patches; reviewed weekly                                               |
 
 ### 12.3 Threat Model
 
-| Threat | Mitigation |
-|---|---|
+| Threat                                       | Mitigation                                                                                                                          |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | AI rate limit bypass via client manipulation | Rate limit checked server-side against `ai_usage` via service role; RLS alone insufficient (API routes use service role for writes) |
-| Razorpay webhook spoofing | HMAC-SHA256 signature verified on every webhook; 401 returned on mismatch |
-| Cross-user shelf data access | RLS policies on `shelf_entries`, `ai_usage`, `profiles` reject any `auth.uid() != user_id` access |
-| Service role key exposure | Key only present in Vercel server-side env; never appears in Next.js `NEXT_PUBLIC_*` vars |
-| Supabase anon key abuse | Anon key is intentionally limited (can only read `books`, `vibes`); no privileged operations possible with anon key |
-| Mass account enumeration | Username uniqueness API (debounced) doesn't reveal email; generic auth errors used |
-| Open redirect | Next.js redirect destinations whitelisted; no arbitrary redirects |
+| Razorpay webhook spoofing                    | HMAC-SHA256 signature verified on every webhook; 401 returned on mismatch                                                           |
+| Cross-user shelf data access                 | RLS policies on `shelf_entries`, `ai_usage`, `profiles` reject any `auth.uid() != user_id` access                                   |
+| Service role key exposure                    | Key only present in Vercel server-side env; never appears in Next.js `NEXT_PUBLIC_*` vars                                           |
+| Supabase anon key abuse                      | Anon key is intentionally limited (can only read `books`, `vibes`); no privileged operations possible with anon key                 |
+| Mass account enumeration                     | Username uniqueness API (debounced) doesn't reveal email; generic auth errors used                                                  |
+| Open redirect                                | Next.js redirect destinations whitelisted; no arbitrary redirects                                                                   |
 
 ### 12.4 Compliance Considerations
 
-| Standard | Applicable? | Notes |
-|---|---|---|
-| GDPR | ✅ Yes | "Delete My Account" cascade purges all personal data; privacy policy required before launch |
-| IT Act, 2000 (India) | ✅ Yes | Privacy policy and ToS required; India-first product |
-| PCI-DSS | ✅ Delegated | Razorpay handles card data; Readmora never stores card numbers; Razorpay is PCI-DSS Level 1 certified |
-| SOC 2 | ❌ No (v1) | Not required for consumer app at this stage; revisit at enterprise tier |
-| HIPAA | ❌ No | No health data involved |
+| Standard             | Applicable?  | Notes                                                                                                 |
+| -------------------- | ------------ | ----------------------------------------------------------------------------------------------------- |
+| GDPR                 | ✅ Yes       | "Delete My Account" cascade purges all personal data; privacy policy required before launch           |
+| IT Act, 2000 (India) | ✅ Yes       | Privacy policy and ToS required; India-first product                                                  |
+| PCI-DSS              | ✅ Delegated | Razorpay handles card data; Readmora never stores card numbers; Razorpay is PCI-DSS Level 1 certified |
+| SOC 2                | ❌ No (v1)   | Not required for consumer app at this stage; revisit at enterprise tier                               |
+| HIPAA                | ❌ No        | No health data involved                                                                               |
 
 ---
 
@@ -1176,26 +1215,26 @@ NEXT_PUBLIC_POSTHOG_HOST=           # Safe to expose
 
 ### 13.1 The Three Pillars
 
-| Pillar | Tool | What It Covers |
-|---|---|---|
-| Metrics | Vercel Analytics + Supabase Dashboard | Core Web Vitals, function invocation counts, DB query times, error rates |
-| Logs | Vercel Function Logs | Structured logs from API routes; Supabase Auth logs for sign-in events |
-| Traces | Vercel Observability (built-in) | Request lifecycle per serverless function invocation |
-| Product Analytics | PostHog | Onboarding funnel, feature usage, vibe distribution, AI summary usage |
+| Pillar            | Tool                                  | What It Covers                                                           |
+| ----------------- | ------------------------------------- | ------------------------------------------------------------------------ |
+| Metrics           | Vercel Analytics + Supabase Dashboard | Core Web Vitals, function invocation counts, DB query times, error rates |
+| Logs              | Vercel Function Logs                  | Structured logs from API routes; Supabase Auth logs for sign-in events   |
+| Traces            | Vercel Observability (built-in)       | Request lifecycle per serverless function invocation                     |
+| Product Analytics | PostHog                               | Onboarding funnel, feature usage, vibe distribution, AI summary usage    |
 
 > 📌 Assumption: No Prometheus/Grafana stack in v1. Vercel's built-in observability and Supabase's dashboard provide sufficient visibility at this scale. Sentry is planned for v1.1 for error tracking and alerting.
 
 ### 13.2 Key Metrics to Monitor
 
-| Category | Metric | Source | Alert Threshold |
-|---|---|---|---|
-| Availability | Function error rate | Vercel Dashboard | > 2% → investigate immediately |
-| Latency | AI summary p95 response | Vercel Logs | > 8s → check Gemini status |
-| Business | AI summary usage / day | PostHog | > 80% of Gemini daily quota → alert |
-| Business | Premium conversions / week | Razorpay + PostHog | Drop > 50% week-on-week → investigate |
-| Data | Supabase DB size | Supabase Dashboard | > 400MB (free: 500MB cap) → upgrade plan |
-| Auth | Failed sign-in rate | Supabase Auth logs | > 50/hour from single IP → possible brute force |
-| Onboarding | Funnel completion rate | PostHog | Drop below 60% → UX investigation |
+| Category     | Metric                     | Source             | Alert Threshold                                 |
+| ------------ | -------------------------- | ------------------ | ----------------------------------------------- |
+| Availability | Function error rate        | Vercel Dashboard   | > 2% → investigate immediately                  |
+| Latency      | AI summary p95 response    | Vercel Logs        | > 8s → check Gemini status                      |
+| Business     | AI summary usage / day     | PostHog            | > 80% of Gemini daily quota → alert             |
+| Business     | Premium conversions / week | Razorpay + PostHog | Drop > 50% week-on-week → investigate           |
+| Data         | Supabase DB size           | Supabase Dashboard | > 400MB (free: 500MB cap) → upgrade plan        |
+| Auth         | Failed sign-in rate        | Supabase Auth logs | > 50/hour from single IP → possible brute force |
+| Onboarding   | Funnel completion rate     | PostHog            | Drop below 60% → UX investigation               |
 
 ### 13.3 Log Standards
 
@@ -1203,15 +1242,15 @@ All API route logs must emit structured JSON:
 
 ```json
 {
-  "timestamp"  : "2026-04-08T10:00:00.000Z",
-  "level"      : "INFO | WARN | ERROR",
-  "route"      : "/api/v1/ai/summary",
-  "user_id"    : "uuid | null",
-  "request_id" : "uuid",
+  "timestamp": "2026-04-08T10:00:00.000Z",
+  "level": "INFO | WARN | ERROR",
+  "route": "/api/v1/ai/summary",
+  "user_id": "uuid | null",
+  "request_id": "uuid",
   "duration_ms": 3420,
-  "status"     : 200,
-  "message"    : "AI summary served from cache",
-  "context"    : { "book_id": "uuid", "cached": true }
+  "status": 200,
+  "message": "AI summary served from cache",
+  "context": { "book_id": "uuid", "cached": true }
 }
 ```
 
@@ -1223,12 +1262,12 @@ All API route logs must emit structured JSON:
 
 > 📌 Assumption: v1 uses manual monitoring (Vercel dashboard, Supabase dashboard, PostHog). Automated alerting via Sentry + PagerDuty is a v1.1 item.
 
-| Severity | Condition | Response | Channel |
-|---|---|---|---|
-| P0 | Supabase DB down / Vercel deploy failing | Immediate — check Supabase status + Vercel status | Founder Slack / phone |
-| P1 | Gemini API returning 5xx consistently | Within 1 hour — disable `ai_summary_enabled` feature flag | Founder Slack |
-| P2 | Razorpay webhook failures (payments not processing) | Within 4 hours — check webhook logs in Razorpay dashboard | Founder Slack |
-| P3 | DB size > 400MB | Next business day — upgrade Supabase plan | Founder Slack |
+| Severity | Condition                                           | Response                                                  | Channel               |
+| -------- | --------------------------------------------------- | --------------------------------------------------------- | --------------------- |
+| P0       | Supabase DB down / Vercel deploy failing            | Immediate — check Supabase status + Vercel status         | Founder Slack / phone |
+| P1       | Gemini API returning 5xx consistently               | Within 1 hour — disable `ai_summary_enabled` feature flag | Founder Slack         |
+| P2       | Razorpay webhook failures (payments not processing) | Within 4 hours — check webhook logs in Razorpay dashboard | Founder Slack         |
+| P3       | DB size > 400MB                                     | Next business day — upgrade Supabase plan                 | Founder Slack         |
 
 ---
 
@@ -1238,13 +1277,14 @@ Readmora is a **B2C consumer application** — not a B2B multi-tenant platform. 
 
 **Isolation Model:** Shared database, shared schema with `user_id` column on every user-owned table. Supabase RLS enforces `auth.uid() = user_id` at the database layer — cross-user access is structurally impossible.
 
-| Isolation Model | Chosen? | Reason |
-|---|---|---|
-| Shared DB, shared schema (user_id RLS) | ✅ Yes | Correct model for B2C — each user is their own "tenant"; RLS enforces isolation; simple ops |
-| Shared DB, separate schema per tenant | ❌ No | Designed for B2B org isolation — overkill and wrong abstraction for individual users |
-| Separate DB per tenant | ❌ No | Completely inappropriate for a consumer app with 10,000+ individual users |
+| Isolation Model                        | Chosen? | Reason                                                                                      |
+| -------------------------------------- | ------- | ------------------------------------------------------------------------------------------- |
+| Shared DB, shared schema (user_id RLS) | ✅ Yes  | Correct model for B2C — each user is their own "tenant"; RLS enforces isolation; simple ops |
+| Shared DB, separate schema per tenant  | ❌ No   | Designed for B2B org isolation — overkill and wrong abstraction for individual users        |
+| Separate DB per tenant                 | ❌ No   | Completely inappropriate for a consumer app with 10,000+ individual users                   |
 
 **User Data Guarantees:**
+
 - No API route using the anon or authenticated role can return another user's shelf entries, usage data, or profile
 - Service role access is restricted to API routes only (never browser); used exclusively for rate limit writes and subscription updates
 - Account deletion cascades all user-owned rows via FK `ON DELETE CASCADE`
@@ -1255,13 +1295,13 @@ Readmora is a **B2C consumer application** — not a B2B multi-tenant platform. 
 
 > 📌 Assumption: No message queue (Redis, RabbitMQ, etc.) is used in v1. All background processing is handled by Supabase `pg_cron` (for scheduled jobs) and Vercel serverless functions (for webhook-triggered work).
 
-| Job Name | Trigger | Mechanism | Priority | Retry Policy | Idempotent? |
-|---|---|---|---|---|---|
-| Subscription Expiry Check | Daily cron (00:00 UTC) | Supabase `pg_cron` | High | 1x; alert on failure | ✅ Yes — checks `subscription_expires_at < NOW()` |
-| Expiry Reminder Email | 3 days before expiry (cron) | `pg_cron` → Resend | Medium | 1x; log failure | ✅ Yes — check if reminder already sent |
-| Payment Failure Email | `payment.failed` webhook | Razorpay → API route → Resend | High | Razorpay retries webhook 3× | ✅ Yes — Razorpay webhook idempotency key |
-| Goodreads Import | User action (onboarding) | Client-side parse → API route batch upsert | Low | 0x (user retries manually) | ✅ Yes — `UNIQUE(user_id, book_id)` upsert |
-| AI Summary Cache | First request per book | Inline in `/api/v1/ai/summary` | N/A | Failure = no cache write; next request retries | ✅ Yes — `UNIQUE(book_id)` on `ai_summaries` |
+| Job Name                  | Trigger                     | Mechanism                                  | Priority | Retry Policy                                   | Idempotent?                                       |
+| ------------------------- | --------------------------- | ------------------------------------------ | -------- | ---------------------------------------------- | ------------------------------------------------- |
+| Subscription Expiry Check | Daily cron (00:00 UTC)      | Supabase `pg_cron`                         | High     | 1x; alert on failure                           | ✅ Yes — checks `subscription_expires_at < NOW()` |
+| Expiry Reminder Email     | 3 days before expiry (cron) | `pg_cron` → Resend                         | Medium   | 1x; log failure                                | ✅ Yes — check if reminder already sent           |
+| Payment Failure Email     | `payment.failed` webhook    | Razorpay → API route → Resend              | High     | Razorpay retries webhook 3×                    | ✅ Yes — Razorpay webhook idempotency key         |
+| Goodreads Import          | User action (onboarding)    | Client-side parse → API route batch upsert | Low      | 0x (user retries manually)                     | ✅ Yes — `UNIQUE(user_id, book_id)` upsert        |
+| AI Summary Cache          | First request per book      | Inline in `/api/v1/ai/summary`             | N/A      | Failure = no cache write; next request retries | ✅ Yes — `UNIQUE(book_id)` on `ai_summaries`      |
 
 ### Subscription Expiry Cron (Supabase pg_cron)
 
@@ -1283,40 +1323,40 @@ SELECT cron.schedule(
 
 ## 16. Integration Architecture
 
-| Integration | Type | Protocol | Auth Method | Failure Impact | Fallback |
-|---|---|---|---|---|---|
-| Supabase (Auth + DB + Storage) | Inbound/Outbound | HTTPS (REST + WebSocket) | Anon key (client), Service role key (server) | Critical — app unusable | Error page; Supabase status page |
-| Gemini API | Outbound | HTTPS (REST) | `GEMINI_API_KEY` server env var | Medium — AI feature disabled | "Summary temporarily unavailable" toast; usage counter not decremented |
-| Razorpay | Outbound (checkout) + Inbound (webhook) | HTTPS | `RAZORPAY_KEY_ID` (client), HMAC `RAZORPAY_WEBHOOK_SECRET` (server) | High — payments disabled | Show error; Razorpay status page; `premium_payments_enabled` flag |
-| Open Library API | Outbound | HTTPS (REST) | None (public) | Low — book search disabled | "Search unavailable" message; existing shelf data unaffected |
-| Resend | Outbound | HTTPS (REST) | `RESEND_API_KEY` server env var | Low — emails not sent | Log failure; no user-facing impact (email is supplementary) |
-| PostHog | Outbound (client SDK) | HTTPS | `NEXT_PUBLIC_POSTHOG_KEY` | Low — analytics gaps | No user-facing impact; events simply not recorded |
+| Integration                    | Type                                    | Protocol                 | Auth Method                                                         | Failure Impact               | Fallback                                                               |
+| ------------------------------ | --------------------------------------- | ------------------------ | ------------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------- |
+| Supabase (Auth + DB + Storage) | Inbound/Outbound                        | HTTPS (REST + WebSocket) | Anon key (client), Service role key (server)                        | Critical — app unusable      | Error page; Supabase status page                                       |
+| Gemini API                     | Outbound                                | HTTPS (REST)             | `GEMINI_API_KEY` server env var                                     | Medium — AI feature disabled | "Summary temporarily unavailable" toast; usage counter not decremented |
+| Razorpay                       | Outbound (checkout) + Inbound (webhook) | HTTPS                    | `RAZORPAY_KEY_ID` (client), HMAC `RAZORPAY_WEBHOOK_SECRET` (server) | High — payments disabled     | Show error; Razorpay status page; `premium_payments_enabled` flag      |
+| Open Library API               | Outbound                                | HTTPS (REST)             | None (public)                                                       | Low — book search disabled   | "Search unavailable" message; existing shelf data unaffected           |
+| Resend                         | Outbound                                | HTTPS (REST)             | `RESEND_API_KEY` server env var                                     | Low — emails not sent        | Log failure; no user-facing impact (email is supplementary)            |
+| PostHog                        | Outbound (client SDK)                   | HTTPS                    | `NEXT_PUBLIC_POSTHOG_KEY`                                           | Low — analytics gaps         | No user-facing impact; events simply not recorded                      |
 
 **Timeout Policy:** All outbound API calls use a hard timeout:
 
-| Integration | Timeout |
-|---|---|
-| Gemini API | 10s |
-| Open Library API | 5s |
-| Razorpay SDK | 10s |
-| Resend API | 5s |
+| Integration      | Timeout |
+| ---------------- | ------- |
+| Gemini API       | 10s     |
+| Open Library API | 5s      |
+| Razorpay SDK     | 10s     |
+| Resend API       | 5s      |
 
 ---
 
 ## 17. Decision Log (ADR Summary)
 
-| # | Decision | Chosen Option | Rejected Options | Reason |
-|---|---|---|---|---|
-| 1 | Architecture pattern | Serverless Monolith (Next.js on Vercel) | Microservices, traditional server | 1–2 engineers; 8-week timeline; zero-ops imperative |
-| 2 | Database | Supabase (Postgres 15 + RLS) | PlanetScale, Neon, self-hosted Postgres | Bundles auth + DB + storage; RLS is perfect for user isolation; free tier covers MVP |
-| 3 | Auth strategy | Supabase Auth (JWT + refresh) | Auth0, Clerk, NextAuth.js | Already committed to Supabase; same SDK; no extra vendor |
-| 4 | AI provider | Google Gemini 1.5 Flash | OpenAI GPT-4o, Anthropic Claude | Free tier (15 RPM) sufficient with caching; cost near-zero for MVP; quality high |
-| 5 | Payment gateway | Razorpay | Stripe, Cashfree | India-first; UPI support; INR pricing; webhook SDK well-documented; lower fees in India |
-| 6 | AI summary caching | Postgres `ai_summaries` table | Redis, in-memory, CDN | Global per-book cache; already have Postgres; no additional infrastructure; durable |
-| 7 | Rate limiting | Server-side DB check (`ai_usage` table, service role) | Client-side, Redis, middleware-only | Only server-side is trustworthy; service role write prevents client bypass |
-| 8 | Theme system | CSS custom properties on `<html>` via `data-vibe` | CSS-in-JS, Tailwind theme variants, JS class toggling | Zero JS bundle cost; instant switch (no rerender); SSR-safe; trivial to persist via profile |
-| 9 | CSV parsing | PapaParse (client-side) | Server-side parsing, streaming | Privacy — reading history never transits to server as raw CSV; PapaParse is battle-tested |
-| 10 | Message queue | None (v1) | Redis, BullMQ, Supabase Realtime | No sustained async workloads that require queue durability; pg_cron covers scheduled jobs |
+| #   | Decision             | Chosen Option                                         | Rejected Options                                      | Reason                                                                                      |
+| --- | -------------------- | ----------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| 1   | Architecture pattern | Serverless Monolith (Next.js on Vercel)               | Microservices, traditional server                     | 1–2 engineers; 8-week timeline; zero-ops imperative                                         |
+| 2   | Database             | Supabase (Postgres 15 + RLS)                          | PlanetScale, Neon, self-hosted Postgres               | Bundles auth + DB + storage; RLS is perfect for user isolation; free tier covers MVP        |
+| 3   | Auth strategy        | Supabase Auth (JWT + refresh)                         | Auth0, Clerk, NextAuth.js                             | Already committed to Supabase; same SDK; no extra vendor                                    |
+| 4   | AI provider          | Google Gemini 1.5 Flash                               | OpenAI GPT-4o, Anthropic Claude                       | Free tier (15 RPM) sufficient with caching; cost near-zero for MVP; quality high            |
+| 5   | Payment gateway      | Razorpay                                              | Stripe, Cashfree                                      | India-first; UPI support; INR pricing; webhook SDK well-documented; lower fees in India     |
+| 6   | AI summary caching   | Postgres `ai_summaries` table                         | Redis, in-memory, CDN                                 | Global per-book cache; already have Postgres; no additional infrastructure; durable         |
+| 7   | Rate limiting        | Server-side DB check (`ai_usage` table, service role) | Client-side, Redis, middleware-only                   | Only server-side is trustworthy; service role write prevents client bypass                  |
+| 8   | Theme system         | CSS custom properties on `<html>` via `data-vibe`     | CSS-in-JS, Tailwind theme variants, JS class toggling | Zero JS bundle cost; instant switch (no rerender); SSR-safe; trivial to persist via profile |
+| 9   | CSV parsing          | PapaParse (client-side)                               | Server-side parsing, streaming                        | Privacy — reading history never transits to server as raw CSV; PapaParse is battle-tested   |
+| 10  | Message queue        | None (v1)                                             | Redis, BullMQ, Supabase Realtime                      | No sustained async workloads that require queue durability; pg_cron covers scheduled jobs   |
 
 ---
 
@@ -1324,81 +1364,81 @@ SELECT cron.schedule(
 
 ### 18.1 Open Questions
 
-| # | Question | Owner | Due Date |
-|---|---|---|---|
-| 1 | Final production domain confirmed (`readmora.app`)? | PM | Week 1 |
-| 2 | Supabase SMTP or custom Resend domain for auth emails? | Engineering | Week 2 |
-| 3 | Should "DNF" shelf be visible on a future public profile? | PM | Week 3 |
-| 4 | Gemini safety filter behaviour for adult fiction genres — test required | Engineering | Week 2 |
-| 5 | Razorpay KYC activation timeline — impacts `premium_payments_enabled` flag go-live | PM | Week 2 |
-| 6 | Font finalisation: Lora (headings) + Inter (body) confirmed? | Design | Week 2 |
-| 7 | PostHog self-host vs cloud at scale? | Engineering | Month 3 review |
+| #   | Question                                                                           | Owner       | Due Date       |
+| --- | ---------------------------------------------------------------------------------- | ----------- | -------------- |
+| 1   | Final production domain confirmed (`readmora.app`)?                                | PM          | Week 1         |
+| 2   | Supabase SMTP or custom Resend domain for auth emails?                             | Engineering | Week 2         |
+| 3   | Should "DNF" shelf be visible on a future public profile?                          | PM          | Week 3         |
+| 4   | Gemini safety filter behaviour for adult fiction genres — test required            | Engineering | Week 2         |
+| 5   | Razorpay KYC activation timeline — impacts `premium_payments_enabled` flag go-live | PM          | Week 2         |
+| 6   | Font finalisation: Lora (headings) + Inter (body) confirmed?                       | Design      | Week 2         |
+| 7   | PostHog self-host vs cloud at scale?                                               | Engineering | Month 3 review |
 
 ### 18.2 Risks
 
-| Risk | Probability | Impact | Mitigation |
-|---|---|---|---|
-| Gemini free tier exhausted (15 RPM sustained) | Medium | High | Global summary caching dramatically reduces RPM; monitor via Gemini console; `ai_summary_enabled` kill-switch |
-| Razorpay KYC delay blocks payments at launch | Low | High | Launch without payments enabled (`premium_payments_enabled = false`); soft-launch free tier only |
-| Supabase free tier DB hits 500MB cap | Low | High | Monitor Supabase dashboard weekly; upgrade to Pro ($25/mo) at 300MB |
-| Goodreads changes CSV export format | Low | Medium | Client-side parser; add format version detection; `goodreads_import_enabled` kill-switch |
-| Vibe colour palettes fail WCAG 2.1 AA contrast | Medium | Medium | Audit all 5 palettes against 4.5:1 ratio before beta; Design owns this |
-| Vercel function timeout on large Goodreads import (2,000 rows) | Low | Medium | Batch upsert in chunks of 200; client parses CSV and sends paginated requests |
-| Open Library API rate limiting (no auth = IP-shared) | Low | Low | Cache book results in `books` table on first search; repeat searches hit DB |
+| Risk                                                           | Probability | Impact | Mitigation                                                                                                    |
+| -------------------------------------------------------------- | ----------- | ------ | ------------------------------------------------------------------------------------------------------------- |
+| Gemini free tier exhausted (15 RPM sustained)                  | Medium      | High   | Global summary caching dramatically reduces RPM; monitor via Gemini console; `ai_summary_enabled` kill-switch |
+| Razorpay KYC delay blocks payments at launch                   | Low         | High   | Launch without payments enabled (`premium_payments_enabled = false`); soft-launch free tier only              |
+| Supabase free tier DB hits 500MB cap                           | Low         | High   | Monitor Supabase dashboard weekly; upgrade to Pro ($25/mo) at 300MB                                           |
+| Goodreads changes CSV export format                            | Low         | Medium | Client-side parser; add format version detection; `goodreads_import_enabled` kill-switch                      |
+| Vibe colour palettes fail WCAG 2.1 AA contrast                 | Medium      | Medium | Audit all 5 palettes against 4.5:1 ratio before beta; Design owns this                                        |
+| Vercel function timeout on large Goodreads import (2,000 rows) | Low         | Medium | Batch upsert in chunks of 200; client parses CSV and sends paginated requests                                 |
+| Open Library API rate limiting (no auth = IP-shared)           | Low         | Low    | Cache book results in `books` table on first search; repeat searches hit DB                                   |
 
 ---
 
 ## 19. Future Roadmap (Phase 2+)
 
-| Phase | Feature / Change | Trigger |
-|---|---|---|
-| v1.1 | Sentry error tracking + alerting | Post-launch stability; replace console.error |
-| v1.1 | Email: weekly reading digest | User engagement; retention metric |
-| v2 | Reading groups / book clubs | Community feature request; DAU growth |
-| v2 | AI reading recommendations (shelf + vibe → suggestions) | Core differentiator evolution; Gemini context window |
-| v2 | Annual reading wrapped / stats report | Retention; viral sharing hook |
-| v2 | Reading streaks + gamification | Engagement; DAU/MAU ratio improvement |
-| v2 | Supabase Realtime (subscription status push) | Eliminate polling for post-payment UI update |
-| v3 | Native iOS + Android apps (React Native) | Mobile-first user segment; > 50,000 MAU trigger |
-| v3 | Redis session cache + hot query cache | If Supabase DB becomes query bottleneck at scale |
-| v3 | Multi-region Supabase (read replicas in EU/US) | Global user base; latency SLA |
-| v3 | Publisher / author partnerships | Monetisation diversification |
+| Phase | Feature / Change                                        | Trigger                                              |
+| ----- | ------------------------------------------------------- | ---------------------------------------------------- |
+| v1.1  | Sentry error tracking + alerting                        | Post-launch stability; replace console.error         |
+| v1.1  | Email: weekly reading digest                            | User engagement; retention metric                    |
+| v2    | Reading groups / book clubs                             | Community feature request; DAU growth                |
+| v2    | AI reading recommendations (shelf + vibe → suggestions) | Core differentiator evolution; Gemini context window |
+| v2    | Annual reading wrapped / stats report                   | Retention; viral sharing hook                        |
+| v2    | Reading streaks + gamification                          | Engagement; DAU/MAU ratio improvement                |
+| v2    | Supabase Realtime (subscription status push)            | Eliminate polling for post-payment UI update         |
+| v3    | Native iOS + Android apps (React Native)                | Mobile-first user segment; > 50,000 MAU trigger      |
+| v3    | Redis session cache + hot query cache                   | If Supabase DB becomes query bottleneck at scale     |
+| v3    | Multi-region Supabase (read replicas in EU/US)          | Global user base; latency SLA                        |
+| v3    | Publisher / author partnerships                         | Monetisation diversification                         |
 
 ---
 
 ## 20. Glossary
 
-| Term | Definition |
-|---|---|
-| HLD | High Level Design — system architecture without implementation detail |
-| SLA | Service Level Agreement — contractual uptime commitment |
-| SLO | Service Level Objective — internal target, stricter than SLA |
-| RTO | Recovery Time Objective — maximum tolerable downtime after a failure |
-| RPO | Recovery Point Objective — maximum tolerable data loss window |
-| RLS | Row Level Security — Supabase/Postgres feature enforcing per-row access control via policies |
-| JWT | JSON Web Token — signed token encoding user identity; issued by Supabase Auth |
-| HMAC | Hash-based Message Authentication Code — used to verify Razorpay webhook signatures |
-| ISR | Incremental Static Regeneration — Next.js feature that revalidates static pages at runtime |
-| LCP | Largest Contentful Paint — Core Web Vitals metric for perceived page load speed |
-| Vibe | A named colour palette applied globally via CSS custom properties to theme the entire UI |
-| Shelf | A reading list category in Readmora: Want to Read / Currently Reading / Finished / DNF |
-| DNF | Did Not Finish — shelf for books the user abandoned |
-| AI Summary | A Gemini-generated book analysis covering themes, writing style, plot overview, and audience fit |
-| Global Cache | The `ai_summaries` table — one AI summary per book, shared across all users |
-| Free Tier | Default plan: 3 AI summaries per week; all other features unlimited |
-| Premium | Paid subscription (₹149/month or ₹999/year): unlimited AI summaries |
-| Week Reset | AI usage counter resets every Sunday 00:00 UTC (ISO week boundary) |
-| service_role | Supabase role that bypasses RLS; used only in server-side API routes via `SUPABASE_SERVICE_ROLE_KEY` |
+| Term                | Definition                                                                                                                                          |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HLD                 | High Level Design — system architecture without implementation detail                                                                               |
+| SLA                 | Service Level Agreement — contractual uptime commitment                                                                                             |
+| SLO                 | Service Level Objective — internal target, stricter than SLA                                                                                        |
+| RTO                 | Recovery Time Objective — maximum tolerable downtime after a failure                                                                                |
+| RPO                 | Recovery Point Objective — maximum tolerable data loss window                                                                                       |
+| RLS                 | Row Level Security — Supabase/Postgres feature enforcing per-row access control via policies                                                        |
+| JWT                 | JSON Web Token — signed token encoding user identity; issued by Supabase Auth                                                                       |
+| HMAC                | Hash-based Message Authentication Code — used to verify Razorpay webhook signatures                                                                 |
+| ISR                 | Incremental Static Regeneration — Next.js feature that revalidates static pages at runtime                                                          |
+| LCP                 | Largest Contentful Paint — Core Web Vitals metric for perceived page load speed                                                                     |
+| Vibe                | A named colour palette applied globally via CSS custom properties to theme the entire UI                                                            |
+| Shelf               | A reading list category in Readmora: Want to Read / Currently Reading / Finished / DNF                                                              |
+| DNF                 | Did Not Finish — shelf for books the user abandoned                                                                                                 |
+| AI Summary          | A Gemini-generated book analysis covering themes, writing style, plot overview, and audience fit                                                    |
+| Global Cache        | The `ai_summaries` table — one AI summary per book, shared across all users                                                                         |
+| Free Tier           | Default plan: 3 AI summaries per week; all other features unlimited                                                                                 |
+| Premium             | Paid subscription (₹149/month or ₹999/year): unlimited AI summaries                                                                                 |
+| Week Reset          | AI usage counter resets every Sunday 00:00 UTC (ISO week boundary)                                                                                  |
+| service_role        | Supabase role that bypasses RLS; used only in server-side API routes via `SUPABASE_SERVICE_ROLE_KEY`                                                |
 | Serverless Monolith | A single deployable application (Next.js) whose backend is composed of independently-invocable serverless functions rather than always-on processes |
-| pg_cron | Postgres extension (enabled in Supabase) for scheduling SQL jobs as cron tasks |
-| PKCE | Proof Key for Code Exchange — OAuth 2.0 security extension used by Supabase Auth for browser-based OAuth flows |
-| WCAG | Web Content Accessibility Guidelines — international standard for web accessibility |
-| PII | Personally Identifiable Information — data that can identify an individual (name, email, avatar) |
+| pg_cron             | Postgres extension (enabled in Supabase) for scheduling SQL jobs as cron tasks                                                                      |
+| PKCE                | Proof Key for Code Exchange — OAuth 2.0 security extension used by Supabase Auth for browser-based OAuth flows                                      |
+| WCAG                | Web Content Accessibility Guidelines — international standard for web accessibility                                                                 |
+| PII                 | Personally Identifiable Information — data that can identify an individual (name, email, avatar)                                                    |
 
 ---
 
 ## 21. Changelog
 
-| Version | Date | Author | Changes |
-|---|---|---|---|
-| 1.0.0 | 2026-04-08 | Platform Engineering | Initial draft — generated from PRD-readmora-v1_0 |
+| Version | Date       | Author               | Changes                                          |
+| ------- | ---------- | -------------------- | ------------------------------------------------ |
+| 1.0.0   | 2026-04-08 | Platform Engineering | Initial draft — generated from PRD-readmora-v1_0 |

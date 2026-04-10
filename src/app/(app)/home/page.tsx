@@ -23,7 +23,9 @@ import {
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useInView } from 'react-intersection-observer';
-import { ingestBook } from '@/lib/actions/book-actions';
+import { addBookToShelf, type BookInsert } from '@/app/actions/shelf.actions';
+import BookCoverImage from '@/components/BookCoverImage';
+import { normalizeCoverUrl, normalizeOpenLibraryWorkId } from '@/lib/books';
 import { cn } from '@/lib/utils';
 import { useScrollDirection } from '@/hooks/useScrollDirection';
 
@@ -38,19 +40,37 @@ interface DiscoveryBook {
   rating?: number;
 }
 
-interface OpenLibraryDoc {
-  key: string;
-  title: string;
-  author_name?: string[];
-  cover_i?: number;
-  ratings_average?: number;
-}
-
 interface ProfileData {
   genre_preferences: string[];
 }
 
 const SEARCH_LIMIT = 24;
+
+function dedupeDiscoveryBooks(books: DiscoveryBook[]): DiscoveryBook[] {
+  const dedupedBooks = new Map<string, DiscoveryBook>();
+
+  for (const book of books) {
+    const stableKey = book.openlibrary_id || book.id;
+    const existingBook = dedupedBooks.get(stableKey);
+
+    if (!existingBook) {
+      dedupedBooks.set(stableKey, book);
+      continue;
+    }
+
+    const mergedRating = existingBook.rating ?? book.rating;
+
+    dedupedBooks.set(stableKey, {
+      ...existingBook,
+      ...book,
+      genre: existingBook.genre,
+      ...(existingBook.isSaved || book.isSaved ? { isSaved: true } : {}),
+      ...(mergedRating !== undefined ? { rating: mergedRating } : {}),
+    });
+  }
+
+  return Array.from(dedupedBooks.values());
+}
 
 // ── Shared Discovery Tech ───────────────────────────────────────────────────
 
@@ -220,50 +240,47 @@ const FILTERS = [
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function fetchBooksForGenre(genre: string, page: number): Promise<DiscoveryBook[]> {
-  const res = await fetch(
-    `https://openlibrary.org/search.json?q=subject:${genre}&limit=${SEARCH_LIMIT}&page=${page + 1}&fields=key,title,author_name,cover_i,ratings_average`,
-    { next: { revalidate: 300 } }
-  );
-  if (!res.ok) return [];
-  const data = await res.json();
+function toDiscoveryBook(book: BookInsert, genre: string): DiscoveryBook {
+  const normalizedOpenLibraryId = normalizeOpenLibraryWorkId(book.openlibrary_id);
 
-  return (data.docs ?? [])
-    .filter((doc: OpenLibraryDoc) => doc.cover_i)
-    .map((doc: OpenLibraryDoc) => ({
-      id: doc.key,
-      title: doc.title,
-      author: doc.author_name?.[0] ?? 'Unknown Author',
-      cover_url: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : '',
-      openlibrary_id: doc.key.split('/')[2],
-      genre,
-      rating: doc.ratings_average,
-    }));
+  return {
+    id: normalizedOpenLibraryId ?? book.openlibrary_id ?? `${book.title}-${book.author}`,
+    title: book.title,
+    author: book.author,
+    cover_url: normalizeCoverUrl(book.cover_url) ?? '',
+    openlibrary_id: normalizedOpenLibraryId ?? '',
+    genre,
+  };
 }
 
-async function searchBooks(query: string): Promise<DiscoveryBook[]> {
+async function fetchBooksForGenre(
+  genre: string,
+  page: number,
+  signal?: AbortSignal
+): Promise<DiscoveryBook[]> {
   const res = await fetch(
-    `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=${SEARCH_LIMIT}&fields=key,title,author_name,cover_i,ratings_average`,
-    { next: { revalidate: 300 } }
+    `/api/v1/books/discover?genre=${encodeURIComponent(genre)}&page=${page + 1}&limit=${SEARCH_LIMIT}`,
+    signal ? { signal } : undefined
   );
   if (!res.ok) return [];
   const data = await res.json();
+  const books = Array.isArray(data.data) ? (data.data as BookInsert[]) : [];
+  return books.map((book) => toDiscoveryBook(book, genre));
+}
 
-  return (data.docs ?? [])
-    .filter((doc: OpenLibraryDoc) => doc.cover_i)
-    .map((doc: OpenLibraryDoc) => ({
-      id: doc.key,
-      title: doc.title,
-      author: doc.author_name?.[0] ?? 'Unknown Author',
-      cover_url: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : '',
-      openlibrary_id: doc.key.split('/')[2],
-      genre: 'Search Result',
-      rating: doc.ratings_average,
-    }));
+async function searchBooks(query: string, signal?: AbortSignal): Promise<DiscoveryBook[]> {
+  const res = await fetch(
+    `/api/v1/books/search?q=${encodeURIComponent(query)}&limit=${SEARCH_LIMIT}`,
+    signal ? { signal } : undefined
+  );
+  if (!res.ok) return [];
+  const data = await res.json();
+  const books = Array.isArray(data.data) ? (data.data as BookInsert[]) : [];
+  return books.map((book) => toDiscoveryBook(book, 'Search Result'));
 }
 
 export default function MasonryHomeFeed() {
-  const supabase = createSupabaseBrowserClient();
+  const [supabase] = useState(() => createSupabaseBrowserClient());
 
   const [books, setBooks] = useState<DiscoveryBook[]>([]);
   const [genres, setGenres] = useState<string[]>([]);
@@ -287,6 +304,9 @@ export default function MasonryHomeFeed() {
   const searchRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const initAbortRef = useRef<AbortController | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const loadMoreAbortRef = useRef<AbortController | null>(null);
   const { ref: sentinelRef, inView } = useInView({ threshold: 0.1, rootMargin: '200px' });
   const { scrollDirection } = useScrollDirection('main');
 
@@ -305,6 +325,10 @@ export default function MasonryHomeFeed() {
   }, []);
 
   const init = useCallback(async () => {
+    initAbortRef.current?.abort();
+    const controller = new AbortController();
+    initAbortRef.current = controller;
+
     setLoading(true);
     setIsSearching(false);
     setActiveTag(null);
@@ -329,20 +353,32 @@ export default function MasonryHomeFeed() {
 
       setGenres(resolvedGenres);
 
-      const results = await Promise.all(resolvedGenres.map((g) => fetchBooksForGenre(g, 0)));
-      const merged = results.flat().sort(() => Math.random() - 0.5);
+      const results = await Promise.all(
+        resolvedGenres.map((g) => fetchBooksForGenre(g, 0, controller.signal))
+      );
+      if (controller.signal.aborted) return;
+      const merged = dedupeDiscoveryBooks(results.flat()).sort(() => Math.random() - 0.5);
       setBooks(merged);
       setPage(1);
       setHasMore(merged.length >= SEARCH_LIMIT);
     } catch (e) {
-      console.error(e);
+      if (!(e instanceof Error && e.name === 'AbortError')) {
+        console.error(e);
+      }
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
   }, [supabase]);
 
   useEffect(() => {
     init();
+    return () => {
+      initAbortRef.current?.abort();
+      searchAbortRef.current?.abort();
+      loadMoreAbortRef.current?.abort();
+    };
   }, [init]);
 
   const handleExecuteSearch = async (queryToUse: string, label?: string, coverImg?: string) => {
@@ -350,6 +386,10 @@ export default function MasonryHomeFeed() {
       init();
       return;
     }
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+
     setLoading(true);
     setIsSearching(true);
     setSearchFocused(false);
@@ -366,13 +406,18 @@ export default function MasonryHomeFeed() {
     }
 
     try {
-      const results = await searchBooks(queryToUse);
+      const results = dedupeDiscoveryBooks(await searchBooks(queryToUse, controller.signal));
+      if (controller.signal.aborted) return;
       setBooks(results);
       setHasMore(false);
     } catch (e) {
-      console.error(e);
+      if (!(e instanceof Error && e.name === 'AbortError')) {
+        console.error(e);
+      }
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
   };
 
@@ -399,58 +444,68 @@ export default function MasonryHomeFeed() {
   useEffect(() => {
     if (!inView || loadingMore || loading || !hasMore || genres.length === 0 || isSearching) return;
 
+    loadMoreAbortRef.current?.abort();
+    const controller = new AbortController();
+    loadMoreAbortRef.current = controller;
+
     async function loadMore() {
       setLoadingMore(true);
       try {
-        const results = await Promise.all(genres.map((g) => fetchBooksForGenre(g, page)));
+        const results = await Promise.all(
+          genres.map((g) => fetchBooksForGenre(g, page, controller.signal))
+        );
+        if (controller.signal.aborted) return;
         const newBooks = results.flat().sort(() => Math.random() - 0.5);
         if (newBooks.length === 0) {
           setHasMore(false);
         } else {
-          setBooks((prev) => {
-            const existingIds = new Set(prev.map((b) => b.id));
-            const unique = newBooks.filter((b) => !existingIds.has(b.id));
-            return [...prev, ...unique];
-          });
+          setBooks((prev) => dedupeDiscoveryBooks([...prev, ...newBooks]));
           setPage((p) => p + 1);
         }
       } catch (e) {
-        console.error(e);
+        if (!(e instanceof Error && e.name === 'AbortError')) {
+          console.error(e);
+        }
       } finally {
-        setLoadingMore(false);
+        if (!controller.signal.aborted) {
+          setLoadingMore(false);
+        }
       }
     }
     loadMore();
+
+    return () => controller.abort();
   }, [inView, genres, hasMore, loading, loadingMore, page, isSearching]);
 
   const handleQuickSave = async (book: DiscoveryBook) => {
     if (savingId) return;
+    const normalizedOpenLibraryId = normalizeOpenLibraryWorkId(book.openlibrary_id);
+    if (!normalizedOpenLibraryId) {
+      alert('This book is missing a valid Open Library identifier and cannot be saved yet.');
+      return;
+    }
     setSavingId(book.id);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error('Please login to save books');
+      const result = await addBookToShelf(
+        {
+          title: book.title,
+          author: book.author,
+          isbn: null,
+          cover_url: book.cover_url || null,
+          description: null,
+          published_year: null,
+          genres: [book.genre],
+          openlibrary_id: `/works/${normalizedOpenLibraryId}`,
+          cover_source: 'open_library',
+          cover_id: null,
+        },
+        { shelf: 'want_to_read', rating: undefined }
+      );
 
-      const { data: newBook, error: ingestErr } = await ingestBook({
-        title: book.title,
-        author: book.author,
-        cover_url: book.cover_url,
-        genres: [book.genre],
-        openlibrary_id: book.openlibrary_id,
-      });
-
-      if (ingestErr) throw ingestErr;
-
-      if (newBook && 'id' in newBook) {
-        const { error: shelfErr } = await supabase.from('shelf_entries').insert({
-          user_id: user.id,
-          book_id: (newBook as { id: string }).id,
-          shelf: 'want_to_read',
-        } as any);
-
-        if (shelfErr) throw shelfErr;
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save book');
       }
+
       setBooks((prev) => prev.map((b) => (b.id === book.id ? { ...b, isSaved: true } : b)));
     } catch (e: any) {
       alert(e.message || 'Failed to save book');
@@ -709,19 +764,24 @@ export default function MasonryHomeFeed() {
         ) : (
           <>
             <div className="columns-2 sm:columns-3 md:columns-4 lg:columns-5 xl:columns-6 gap-5 space-y-10">
-              {books.map((book) => (
+              {books.map((book, index) => (
                 <div
                   key={book.id}
                   className="break-inside-avoid group cursor-pointer animate-in fade-in slide-in-from-bottom-4 duration-500"
                 >
-                  <Link href={`/book/${book.openlibrary_id}`} className="block">
+                  <Link
+                    href={book.openlibrary_id ? `/book/${book.openlibrary_id}` : '/home'}
+                    className="block"
+                  >
                     <div className="relative rounded-[2.5rem] overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 bg-gray-50 border border-black/5">
                       <div className="aspect-[2/3] relative">
-                        <img
-                          src={book.cover_url}
-                          alt={book.title}
-                          className="w-full h-full object-cover transition-all duration-700 group-hover:scale-[1.03] group-hover:brightness-90"
-                          loading="lazy"
+                        <BookCoverImage
+                          title={book.title}
+                          coverUrl={book.cover_url}
+                          fill
+                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1536px) 20vw, 16vw"
+                          className="object-cover transition-all duration-700 group-hover:scale-[1.03] group-hover:brightness-90"
+                          priority={index < 6}
                         />
                         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                           <button
@@ -730,7 +790,7 @@ export default function MasonryHomeFeed() {
                               e.stopPropagation();
                               if (!book.isSaved) handleQuickSave(book);
                             }}
-                            disabled={savingId === book.id || book.isSaved}
+                            disabled={savingId === book.id || book.isSaved || !book.openlibrary_id}
                             className={cn(
                               'absolute top-5 right-5 text-white px-5 py-2.5 rounded-full font-black text-sm shadow-xl transform active:scale-95 transition-all flex items-center gap-2',
                               book.isSaved ? 'bg-green-600' : 'bg-red-600 hover:bg-red-700'

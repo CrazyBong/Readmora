@@ -102,7 +102,7 @@
   }
 
   [data-vibe='sakura'] {
-    --color-bg: #f2cfca;
+    --color-bg: #f6d7dc;
     --color-surface: #fadadd;
     --color-primary: #443025;
     --color-secondary: #7f5836;
@@ -125,7 +125,7 @@
     --color-overlay: rgba(198, 70, 50, 0.1);
   }
 
-  [data-vibe='winter-frost'] {
+  [data-vibe='winter_frost'] {
     --color-bg: #e3e9f4;
     /* Cool Dawn — light slate blue */
     --color-surface: #f0f4fa;

@@ -16,9 +16,13 @@
 
 ```json
 {
-  "strict": true, "noImplicitAny": true, "strictNullChecks": true,
-  "noUnusedLocals": true, "noUnusedParameters": true,
-  "exactOptionalPropertyTypes": true, "noUncheckedIndexedAccess": true
+  "strict": true,
+  "noImplicitAny": true,
+  "strictNullChecks": true,
+  "noUnusedLocals": true,
+  "noUnusedParameters": true,
+  "exactOptionalPropertyTypes": true,
+  "noUncheckedIndexedAccess": true
 }
 ```
 
@@ -35,6 +39,7 @@
 ## BACKEND STANDARDS
 
 ### API Design (P1)
+
 - RESTful. Correct HTTP verbs. Version from day one: `/api/v1/...`
 - Consistent envelope:
   - Success: `{ success: true, data: T, meta?: PaginationMeta }`
@@ -43,10 +48,12 @@
 - Pagination mandatory on list endpoints. Cursor-based for large datasets.
 
 ### Validation (P0)
+
 - Validate every request body, query param, and path param before business logic.
 - Zod `.strict()` — reject unknown fields. Never pass raw bodies to DB queries.
 
 ### Database (P0 integrity, P1 patterns)
+
 - No raw SQL strings. Use Prisma, Drizzle, or Knex.
 - All DB access through repository layer. Services never import DB client directly.
 - Every table: `id` (UUID v7), `created_at`, `updated_at`, `deleted_at` (soft delete).
@@ -57,6 +64,7 @@
 - One command to run the app fully locally with seed data.
 
 ### Error Handling (P0)
+
 ```typescript
 // Never — silent failure is the worst failure
 catch (e) { console.log(e); }
@@ -67,6 +75,7 @@ catch (error) {
   throw new AppError('OPERATION_FAILED', 'Could not complete the operation', 500, { cause: error });
 }
 ```
+
 - Typed `AppError` class: `code`, `message`, `statusCode`, optional `details`.
 - Catch unhandled rejections at process level — log before crash.
 - Never expose stack traces or internals to API consumers in production.

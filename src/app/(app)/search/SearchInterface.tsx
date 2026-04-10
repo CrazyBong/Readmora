@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Search, Loader2, Plus, Check } from 'lucide-react';
-import Image from 'next/image';
 import { addBookToShelf, type BookInsert } from '@/app/actions/shelf.actions';
+import BookCoverImage from '@/components/BookCoverImage';
 
 export default function SearchInterface() {
   const [query, setQuery] = useState('');
@@ -16,6 +16,7 @@ export default function SearchInterface() {
   const [selectedShelf, setSelectedShelf] = useState<
     'want_to_read' | 'currently_reading' | 'finished' | 'dnf'
   >('want_to_read');
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   // Simple debounce
   useEffect(() => {
@@ -29,23 +30,40 @@ export default function SearchInterface() {
   useEffect(() => {
     async function search() {
       if (!debouncedQuery.trim()) {
+        searchAbortRef.current?.abort();
         setResults([]);
+        setIsSearching(false);
         return;
       }
+      searchAbortRef.current?.abort();
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
       setIsSearching(true);
       try {
-        const res = await fetch(`/api/v1/books/search?q=${encodeURIComponent(debouncedQuery)}`);
+        const res = await fetch(`/api/v1/books/search?q=${encodeURIComponent(debouncedQuery)}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          throw new Error(`Search request failed with status ${res.status}`);
+        }
         const json = await res.json();
-        if (json.success) {
+        if (!controller.signal.aborted && json.success) {
           setResults(json.data);
         }
       } catch (err) {
-        console.error('Search failed', err);
+        if (!(err instanceof Error && err.name === 'AbortError')) {
+          console.error('Search failed', err);
+        }
       } finally {
-        setIsSearching(false);
+        if (!controller.signal.aborted) {
+          setIsSearching(false);
+        }
       }
     }
     search();
+    return () => {
+      searchAbortRef.current?.abort();
+    };
   }, [debouncedQuery]);
 
   const handleAdd = async (book: BookInsert, key: string) => {
@@ -127,13 +145,13 @@ export default function SearchInterface() {
                 >
                   <div className="w-16 md:w-20 aspect-[2/3] bg-gray-200 rounded overflow-hidden shrink-0">
                     {book.cover_url ? (
-                      <Image
-                        src={book.cover_url}
-                        alt="Cover"
+                      <BookCoverImage
+                        title={book.title}
+                        coverUrl={book.cover_url}
                         width={80}
                         height={120}
+                        sizes="(max-width: 768px) 64px, 80px"
                         className="w-full h-full object-cover"
-                        loading="lazy"
                       />
                     ) : (
                       <div className="w-full h-full bg-[color:var(--color-primary)] flex items-center justify-center p-1">

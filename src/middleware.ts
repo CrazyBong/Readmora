@@ -42,7 +42,9 @@ export async function middleware(request: NextRequest) {
   // ── Public routes that never need auth ──────────────────────────
   const isPublicRoute =
     pathname === '/' ||
+    pathname.startsWith('/health') ||
     pathname.startsWith('/login') ||
+    pathname.startsWith('/signup') ||
     pathname.startsWith('/auth/') ||
     pathname.startsWith('/api/v1/books/search') || // public book search
     pathname.startsWith('/_next') ||
@@ -83,7 +85,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Authenticated users should not see the login page ───────────
-  if (user && pathname.startsWith('/login')) {
+  if (user && (pathname.startsWith('/login') || pathname.startsWith('/signup'))) {
     const nextPath = request.nextUrl.searchParams.get('next');
     let target = '/home';
 
@@ -113,13 +115,12 @@ export async function middleware(request: NextRequest) {
       .from('profiles')
       .select('onboarding_complete')
       .eq('id', user.id)
-      .maybeSingle(); // Use maybeSingle to prevent throw if it genuinely isn't there yet
+      .maybeSingle();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const profileData = profile as { onboarding_complete: boolean } | null;
+    const isOnboardingComplete = profileData?.onboarding_complete ?? false;
 
-    // Missing profile OR incomplete onboarding -> Send to onboarding
-    if (!profileData || !profileData.onboarding_complete) {
+    if (!isOnboardingComplete) {
       return redirectWithCookies(new URL('/onboarding', request.url));
     }
   }
